@@ -1,41 +1,45 @@
-<!DOCTYPE html>
+<!<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-<title>Kaleidoscope — Core + Touch-Linked Audio</title>
+<title>Kaleidoscope — Core + Image Loader + Screenshot</title>
 <style>
   html,body{margin:0;height:100%;background:#000;overflow:hidden}
   canvas{display:block;width:100vw;height:100vh;touch-action:none;cursor:grab}
-  #ui{position:fixed;left:50%;top:10px;transform:translateX(-50%);
+  #ui{position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:10;
       display:flex;gap:8px;flex-wrap:wrap;align-items:center;
       background:rgba(16,18,24,.78);color:#eaf0ff;font:14px system-ui,Segoe UI,Roboto;
-      border:1px solid #272d3a;border-radius:12px;padding:8px 10px;z-index:10}
-  #ui label{opacity:.8;margin-right:6px}
+      border:1px solid #272d3a;border-radius:12px;padding:8px 10px}
+  #ui label{opacity:.85;margin-right:4px}
   #ui input[type="range"], #ui select, #ui button, #ui input[type="file"]{
     background:#0b0d12;color:#fff;border:1px solid #272d3a;border-radius:10px;padding:6px 8px
   }
   #hint{position:fixed;left:10px;bottom:10px;color:#9aa5c6;background:rgba(0,0,0,.5);
         border:1px solid #272d3a;border-radius:10px;padding:8px 10px;font:12px system-ui;z-index:9}
+  .ok{color:#9cff9c} .bad{color:#ff9c9c}
 </style>
 </head>
 <body>
 <canvas id="gl"></canvas>
 
 <div id="ui">
+  <label>Visual</label><input id="vis" type="file" accept="image/*,video/*"/>
   <label>Audio</label><input id="aud" type="file" accept="audio/*"/>
   <button id="mic">🎤 Mic Off</button>
   <button id="play">▶️ Play</button>
-  <label>Vol</label><input id="vol" type="range" min="0" max="1" step="0.01" value="0.8"/>
+  <label>Vol</label><input id="vol" type="range" min="0" max="1" step="0.01" value="0.9"/>
   <label>Wedges</label><input id="wedges" type="range" min="3" max="48" step="1" value="12"/>
   <button id="mirror">Mirror: On</button>
+  <button id="shot">📷 Screenshot</button>
+  <span id="aStat" class="bad">No audio</span>
 </div>
 
-<div id="hint">Touch: 1-finger drag = spin (also speeds audio). 2-finger pinch = zoom (also changes filter). Double-tap canvas to hide/show controls.</div>
+<div id="hint">Touch: 1-finger drag = spin (also nudges audio speed). 2-finger pinch = zoom (also opens the filter). Double-tap canvas hides/shows controls.</div>
 
 <script>
 (() => {
-  // ===== WebGL Kaleidoscope =====
+  // ===== WebGL setup =====
   const canvas = document.getElementById('gl');
   const gl = canvas.getContext('webgl', {preserveDrawingBuffer:true, antialias:true});
   if(!gl){ alert('WebGL not available'); return; }
@@ -61,12 +65,14 @@
       float ang = atan(p.y,p.x), rad = length(p);
       float w = 6.28318530718/float(u_k);
       ang = mod(ang, w);
-      if(u_mirror==1){ ang = abs(ang - 0.5*w) - 0.5*w; } // seam-free flip
+      if(u_mirror==1){ ang = abs(ang - 0.5*w) - 0.5*w; }
       ang += u_rot;
       vec2 q = vec2(cos(ang), sin(ang))*rad; q.x/=asp; q*=u_zoom;
       return q*0.5 + 0.5;
     }
-    vec3 rainbow(vec2 uv){ return 0.5 + 0.5*cos(vec3(0.0,2.094,4.188) + u_time*0.25 + vec3(uv,0.0)*6.0); }
+    vec3 rainbow(vec2 uv){
+      return 0.5 + 0.5 * cos(vec3(0.0,2.094,4.188) + u_time*0.25 + vec3(uv,0.0)*6.0);
+    }
     void main(){
       vec2 uv = kale(v*2.0-1.0);
       vec3 col = (u_hasTex==1) ? texture2D(u_tex, uv).rgb : rainbow(uv);
@@ -94,7 +100,6 @@
         u_rot=U('u_rot'), u_zoom=U('u_zoom'), u_k=U('u_k'), u_mirror=U('u_mirror');
   gl.uniform1i(u_tex, 0);
 
-  // Texture (safe defaults)
   const tex = gl.createTexture();
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -105,37 +110,64 @@
   gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([24,24,24,255]));
   let hasTex = 0;
 
-  // Optional: you can extend to load an image/video texture later if you like
+  // Visual loader (image/video)
+  const vis = document.getElementById('vis');
+  let video = null;
+  vis.onchange = e=>{
+    const f = e.target.files?.[0]; if(!f) return;
+    if(f.type.startsWith('image/')){
+      video = null;
+      const img = new Image();
+      img.onload = ()=>{
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);
+        hasTex = 1;
+      };
+      img.src = URL.createObjectURL(f);
+    } else if(f.type.startsWith('video/')){
+      video = document.createElement('video');
+      video.src = URL.createObjectURL(f);
+      video.loop=true; video.muted=true; video.playsInline=true;
+      video.onloadeddata=()=>video.play();
+      hasTex = 1;
+    }
+  };
 
-  // ===== Audio: file/mic + touch link =====
+  // ===== Audio setup (clearer flow) =====
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   const actx = new AudioCtx();
-  const gain = actx.createGain(); gain.gain.value = 0.8;
-  const filter = actx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 1200; filter.Q.value = 0.9;
-  gain.connect(actx.destination);
-  filter.connect(gain);
+  const gain = actx.createGain(); gain.gain.value = 0.9;
+  const filter = actx.createBiquadFilter(); filter.type='lowpass'; filter.frequency.value=1200; filter.Q.value=0.9;
+  const aStat = document.getElementById('aStat');
+
+  // Connect chain: source -> filter -> gain -> speakers
+  filter.connect(gain); gain.connect(actx.destination);
 
   const audio = new Audio(); audio.loop=true; audio.crossOrigin='anonymous';
-  let srcNode = null; function useAudioEl(){
+  let srcNode = null;
+  function connectAudioEl(){
     if(srcNode){ try{srcNode.disconnect();}catch{} }
     srcNode = actx.createMediaElementSource(audio);
     srcNode.connect(filter);
   }
 
+  // Load audio file
   const audFile = document.getElementById('aud');
   audFile.onchange = e=>{
     const f = e.target.files?.[0]; if(!f) return;
     const url = URL.createObjectURL(f);
-    audio.src = url; useAudioEl(); actx.resume(); audio.play();
-    playBtn.textContent = '⏸ Pause';
+    audio.src = url; connectAudioEl();
+    aStat.textContent = 'Audio loaded'; aStat.className='ok';
   };
 
+  // Mic
   let micStream=null, usingMic=false;
   const micBtn = document.getElementById('mic');
   micBtn.onclick = async ()=>{
     if(usingMic){
       if(micStream){ micStream.getTracks().forEach(t=>t.stop()); }
       usingMic=false; micBtn.textContent='🎤 Mic Off';
+      aStat.textContent = audio.src ? 'Audio loaded' : 'No audio'; aStat.className = audio.src?'ok':'bad';
       return;
     }
     try{
@@ -143,88 +175,86 @@
       const mic = actx.createMediaStreamSource(micStream);
       mic.connect(filter);
       usingMic=true; micBtn.textContent='🎤 Mic On';
+      aStat.textContent='Mic live'; aStat.className='ok';
       actx.resume();
-    }catch(e){ alert('Mic permission denied/unavailable: '+e.message); }
+    }catch(e){ alert('Mic blocked: '+e.message); }
   };
 
+  // Play/Pause + volume
   const playBtn = document.getElementById('play');
   playBtn.onclick = ()=>{
     actx.resume();
-    if(audio.paused){ audio.play(); playBtn.textContent='⏸ Pause'; }
-    else { audio.pause(); playBtn.textContent='▶️ Play'; }
+    if(audio.src){ // only play if a file is loaded
+      if(audio.paused){ audio.play(); playBtn.textContent='⏸ Pause'; }
+      else { audio.pause(); playBtn.textContent='▶️ Play'; }
+    } else {
+      // If no file, but mic is on—just resume the context
+      if(usingMic){ aStat.textContent='Mic live'; aStat.className='ok'; }
+      else { aStat.textContent='No audio'; aStat.className='bad'; }
+    }
   };
   document.getElementById('vol').oninput = e=>{ gain.gain.value = +e.target.value; };
 
-  // ===== Controls for kaleidoscope =====
+  // ===== Kaleidoscope controls =====
   const wedgesEl = document.getElementById('wedges');
-  let K = +wedgesEl.value;
-  wedgesEl.oninput = ()=>{ K = +wedgesEl.value; };
-
+  let K = +wedgesEl.value; wedgesEl.oninput = ()=> K = +wedgesEl.value;
   const mirrorBtn = document.getElementById('mirror');
-  let mirrorOn = true;
-  mirrorBtn.onclick = ()=>{ mirrorOn = !mirrorOn; mirrorBtn.textContent = 'Mirror: ' + (mirrorOn?'On':'Off'); };
+  let mirrorOn = true; mirrorBtn.onclick = ()=>{ mirrorOn = !mirrorOn; mirrorBtn.textContent='Mirror: '+(mirrorOn?'On':'Off'); };
 
-  // ===== Touch gestures: also bend audio =====
-  let rot = 0, zoom = 1;
-  let pointers = new Map(), lastDist = 0, lastTap=0;
-
+  // ===== Touch gestures (also nudge audio) =====
+  let rot = 0, zoom = 1; let pointers=new Map(), lastDist=0, lastTap=0;
   canvas.addEventListener('pointerdown', e=>{
-    pointers.set(e.pointerId, e);
-    canvas.setPointerCapture?.(e.pointerId);
-    // detect double-tap to toggle UI
-    const now = performance.now();
-    if(now - lastTap < 350){
-      document.getElementById('ui').style.display =
-        (document.getElementById('ui').style.display==='none'?'flex':'none');
-    }
-    lastTap = now;
+    pointers.set(e.pointerId, e); canvas.setPointerCapture?.(e.pointerId);
+    const now = performance.now(); if(now-lastTap<350){ // double tap toggle UI
+      const ui = document.getElementById('ui'); ui.style.display = ui.style.display==='none'?'flex':'none';
+    } lastTap=now;
   });
-
   canvas.addEventListener('pointermove', e=>{
     if(!pointers.has(e.pointerId)) return;
-    const prev = pointers.get(e.pointerId);
-    pointers.set(e.pointerId, e);
-
+    const prev = pointers.get(e.pointerId); pointers.set(e.pointerId, e);
     if(pointers.size===1){
-      // Spin visual
-      const dx = e.clientX - prev.clientX;
-      rot += dx * 0.01;
-
-      // Also bend audio speed a bit (scratch feel)
-      const bend = Math.max(0.25, Math.min(2.0, 1 + dx*0.002));
-      if(!isNaN(bend) && isFinite(bend) && audio.playbackRate !== undefined){
-        audio.playbackRate = bend;
-      }
+      const dx = e.clientX - prev.clientX; rot += dx*0.01;
+      // gentle playback bend
+      if(audio && audio.src){ audio.playbackRate = Math.max(0.25, Math.min(2.0, 1 + dx*0.002)); }
     } else if(pointers.size===2){
-      // Pinch zoom visual
       const [a,b] = [...pointers.values()];
       const d = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
-      if(!lastDist) lastDist = d;
-      const dd = d - lastDist; lastDist = d;
-      zoom *= (1 + dd*0.003);
-      zoom = Math.max(0.2, Math.min(5, zoom));
-
-      // Map zoom to audio filter (more zoom -> brighter)
-      const f = Math.max(80, Math.min(12000, 1200 * zoom));
+      if(!lastDist) lastDist=d; const dd=d-lastDist; lastDist=d;
+      zoom *= (1 + dd*0.003); zoom = Math.max(0.2, Math.min(5, zoom));
+      // zoom maps to filter brightness
+      const f = Math.max(80, Math.min(12000, 1200*zoom));
       filter.frequency.setTargetAtTime(f, actx.currentTime, 0.02);
     }
   }, {passive:false});
-
   function endPtr(e){ pointers.delete(e.pointerId); if(pointers.size<2) lastDist=0; }
   canvas.addEventListener('pointerup', endPtr);
   canvas.addEventListener('pointercancel', endPtr);
   canvas.addEventListener('pointerleave', endPtr);
 
+  // ===== Screenshot PNG =====
+  document.getElementById('shot').onclick = ()=>{
+    // force a draw first, then save
+    const url = canvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url; a.download = `kaleidoscope_${Date.now()}.png`;
+    a.click();
+  };
+
   // ===== Render loop =====
   let t0 = performance.now();
   function frame(){
     requestAnimationFrame(frame);
-    const now = performance.now();
-    const dt = (now - t0)/1000; t0 = now;
+    const now = performance.now(); const dt = (now - t0)/1000; t0 = now;
 
-    // Ease audio speed gently back to 1.0 when not dragging
-    if(pointers.size===0 && Math.abs(audio.playbackRate-1) > 0.001){
+    // Ease audio rate back to 1 when not dragging
+    if(pointers.size===0 && audio && audio.src && Math.abs(audio.playbackRate-1)>0.001){
       audio.playbackRate += (1 - audio.playbackRate) * 0.06;
+    }
+
+    // Update video texture if present
+    if(video && video.readyState>=2){
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE, video);
     }
 
     gl.useProgram(prog);
