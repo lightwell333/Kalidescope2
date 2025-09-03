@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -58,7 +57,7 @@
         <select id="mirror"><option value="1" selected>On</option><option value="0">Off</option></select>
       </div>
       <div class="dials">
-        <div class="dial" id="dialSpeed" data-min="-4" data-max="4" data-value="0"><div class="cap"></></div><div class="mark"></div><b>Speed</b></div>
+        <div class="dial" id="dialSpeed" data-min="-4" data-max="4" data-value="0"><div class="cap"></div><div class="mark"></div><b>Speed</b></div>
         <div class="dial" id="dialZoom"  data-min="0.2" data-max="4" data-value="1"><div class="cap"></div><div class="mark"></div><b>Zoom</b></div>
         <div class="dial" id="dialTwist" data-min="-2" data-max="2" data-value="0"><div class="cap"></div><div class="mark"></div><b>Twist</b></div>
       </div>
@@ -68,8 +67,10 @@
       <h3>Audio</h3>
       <div class="row"><label>Upload Audio</label><input id="audFile" type="file" accept="audio/*"></div>
       <div class="row">
-        <button id="mic">🎤 Mic Off</button>
         <button id="play">▶️ Play</button>
+        <button id="mic">🎤 Mic Off</button>
+        <button id="tone">🔔 Test Tone</button><button id="donate">💚 Donate</button>
+
         <label>Vol</label><input id="vol" type="range" min="0" max="1" step="0.01" value="0.85">
       </div>
       <div class="row"><label>Filter</label>
@@ -89,7 +90,7 @@
 
     <div class="card">
       <h3>Recording</h3>
-      <div class="row">Records canvas + processed audio (best in desktop Chrome). On iOS Safari, audio capture may be limited.</div>
+      <div class="row">Records canvas + processed audio (best in desktop Chrome). iOS Safari may record video-only.</div>
     </div>
 
   </div>
@@ -163,9 +164,8 @@
   const gain=actx.createGain(); gain.gain.value=0.85;
   const filter=actx.createBiquadFilter(); filter.type='bandpass'; filter.frequency.value=900; filter.Q.value=1.0;
   const shaper=actx.createWaveShaper(); function mkCurve(d){const n=256,c=new Float32Array(n);for(let i=0;i<n;i++){const x=i/(n-1)*2-1; c[i]=Math.tanh(x*(1+18*d));}return c;} shaper.curve=mkCurve(0.25);
-  const analyser=actx.createAnalyser(); analyser.fftSize=1024; analyser.smoothingTimeConstant=0.85;
   const merger=actx.createMediaStreamDestination(); // for recording
-  filter.connect(shaper); shaper.connect(gain); gain.connect(analyser); gain.connect(actx.destination); gain.connect(merger);
+  filter.connect(shaper); shaper.connect(gain); gain.connect(actx.destination); gain.connect(merger);
   const aStat=document.getElementById('aStat');
 
   const audio=new Audio(); audio.loop=true; let mediaSrc=null;
@@ -181,12 +181,16 @@
   micBtn.onclick=async()=>{ if(usingMic){ if(micStream){micStream.getTracks().forEach(t=>t.stop());} usingMic=false; micBtn.textContent='🎤 Mic Off'; aStat.textContent=audio.src?'Audio loaded':'No audio'; aStat.className=audio.src?'ok':'bad'; return; }
     try{ micStream=await navigator.mediaDevices.getUserMedia({audio:true}); const mic=actx.createMediaStreamSource(micStream); mic.connect(filter); usingMic=true; micBtn.textContent='🎤 Mic On'; aStat.textContent='Mic live'; aStat.className='ok'; actx.resume(); }catch(err){ alert('Mic error: '+err.message); } };
 
-  document.getElementById('play').onclick=e=>{ actx.resume(); if(audio.src){ if(audio.paused){audio.play(); e.target.textContent='⏸️ Pause';} else {audio.pause(); e.target.textContent='▶️ Play';} } };
+  document.getElementById('play').onclick=e=>{ actx.resume(); if(audio.src){ if(audio.paused){audio.play(); e.target.textContent='⏸️ Pause'; aStat.textContent='Playing'; aStat.className='ok';} else {audio.pause(); e.target.textContent='▶️ Play'; aStat.textContent='Paused'; aStat.className='ok';} } else { aStat.textContent='Load audio or use Mic/Test Tone'; aStat.className='bad'; } };
   document.getElementById('vol').oninput=e=>{ gain.gain.value=+e.target.value; };
   document.getElementById('fType').onchange=e=>{ filter.type=e.target.value; };
   document.getElementById('drive').oninput=e=>{ shaper.curve=mkCurve(+e.target.value); };
 
-  // Wheels -> visuals + audio
+  // Test tone
+  document.getElementById('tone').onclick=()=>{ actx.resume(); const osc=actx.createOscillator(), env=actx.createGain(); osc.type='sawtooth'; osc.frequency.value=220; env.gain.value=0; osc.connect(env); env.connect(filter); const t=actx.currentTime; env.gain.setValueAtTime(0,t); env.gain.linearRampToValueAtTime(0.9,t+0.01); env.gain.exponentialRampToValueAtTime(0.0001,t+0.6); osc.start(t); osc.stop(t+0.65); aStat.textContent='Test tone played'; aStat.className='ok'; };
+
+  // Wheels → visuals + audio
+  let spinWheel=0, zoomBase=1, twist=0, scratch=0;
   document.getElementById('dialSpeed').addEventListener('input',e=>{spinWheel=e.detail;});
   document.getElementById('dialZoom').addEventListener('input',e=>{zoomBase=e.detail;});
   document.getElementById('dialTwist').addEventListener('input',e=>{twist=e.detail;});
@@ -198,15 +202,18 @@
 
   /* ========= Recorder ========= */
   const recBtn=document.getElementById('rec'), dl=document.getElementById('download'); let mr=null, chunks=[];
-  recBtn.onclick=()=>{ if(mr && mr.state==='recording'){ mr.stop(); return; } try{ const stream=canvas.captureStream(60); const at=merger.stream.getAudioTracks(); if(at.length) stream.addTrack(at[0]); mr=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9,opus'}); chunks=[]; mr.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); }; mr.onstop=()=>{ const blob=new Blob(chunks,{type:'video/webm'}); const url=URL.createObjectURL(blob); dl.href=url; dl.style.display='inline'; dl.textContent='Download'; dl.download=`psy_kaleido_${Date.now()}.webm`; recBtn.textContent='⏺ Start'; }; mr.start(); recBtn.textContent='⏹ Stop'; dl.style.display='none'; }catch(err){ alert('Recording not supported: '+err.message); } };
+  recBtn.onclick=()=>{ if(mr && mr.state==='recording'){ mr.stop(); return; } try{ const stream=canvas.captureStream(60); const at=merger.stream.getAudioTracks(); if(at.length) stream.addTrack(at[0]); let mt='video/webm;codecs=vp9,opus'; if(!MediaRecorder.isTypeSupported(mt)) mt='video/webm;codecs=vp8,opus'; if(!MediaRecorder.isTypeSupported(mt)) mt='video/webm'; mr=new MediaRecorder(stream,{mimeType:mt}); chunks=[]; mr.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); }; mr.onstop=()=>{ const blob=new Blob(chunks,{type:'video/webm'}); const url=URL.createObjectURL(blob); dl.href=url; dl.style.display='inline'; dl.textContent='Download'; dl.download=`psy_kaleido_${Date.now()}.webm`; recBtn.textContent='⏺ Start'; }; mr.start(); recBtn.textContent='⏹ Stop'; dl.style.display='none'; }catch(err){ alert('Recording not supported here: '+err.message+'\\nTip: desktop Chrome gives audio+video.'); } };
 
   /* ========= Touch gestures (linked to audio) ========= */
+  const touchLinkSel=document.getElementById('touchAudio');
   let pointers=new Map(), lastDist=0, lastTap=0;
+  let spinDrag=0, zoomDrag=0;
   canvas.addEventListener('pointerdown',e=>{ pointers.set(e.pointerId,e); canvas.setPointerCapture?.(e.pointerId); const t=performance.now(); if(t-lastTap<350){ panel.classList.toggle('hidden'); } lastTap=t; });
   canvas.addEventListener('pointermove',e=>{ if(!pointers.has(e.pointerId)) return; const prev=pointers.get(e.pointerId); pointers.set(e.pointerId,e);
-    if(pointers.size===1){ const dx=e.clientX-prev.clientX; spinDrag+=dx*0.002; if(touchAudio.value==='1'){ const bend=Math.max(0.25,Math.min(2.0,1+dx*0.002+scratch*0.2)); if(audio && audio.playbackRate!==undefined) audio.playbackRate=bend; } }
-    else if(pointers.size===2){ const [a,b]=[...pointers.values()]; const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY); if(!lastDist) lastDist=d; const dd=d-lastDist; lastDist=d; zoomDrag += dd*0.003;
-      if(touchAudio.value==='1'){ const f=Math.max(80,Math.min(12000, 900*(zoomBase+zoomDrag))); filter.frequency.setTargetAtTime(f, actx.currentTime, 0.02); } } });
+    if(pointers.size===1){ const dx=e.clientX-prev.clientX; spinDrag+=dx*0.002;
+      if(touchLinkSel.value==='1' && audio && audio.playbackRate!==undefined && !audio.paused){ audio.playbackRate=Math.max(0.25,Math.min(2.0,1+dx*0.002+scratch*0.2)); } }
+    else if(pointers.size===2){ const [a,b]=[...pointers.values()]; const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY); if(!lastDist) lastDist=d; const dd=d-lastDist; lastDist=d; zoomDrag+=dd*0.003;
+      if(touchLinkSel.value==='1'){ const f=Math.max(80,Math.min(12000, 900*(zoomBase+zoomDrag))); filter.frequency.setTargetAtTime(f, actx.currentTime, 0.02); } } });
   function endPtr(e){ pointers.delete(e.pointerId); if(pointers.size<2) lastDist=0; }
   canvas.addEventListener('pointerup',endPtr); canvas.addEventListener('pointercancel',endPtr); canvas.addEventListener('pointerleave',endPtr);
 
@@ -215,14 +222,14 @@
 
   /* ========= FPS + Render loop ========= */
   const fpsEl=document.getElementById('fps'); let lastF=performance.now(), frames=0;
-  let t0=performance.now(); let rot=0, twist=0, spinWheel=0, spinDrag=0, zoomBase=1, zoomDrag=0, scratch=0;
+  let t0=performance.now(); let rot=0;
   function loop(){ requestAnimationFrame(loop); const now=performance.now(); const dt=(now-t0)/1000; t0=now; frames++; if(now-lastF>500){ fpsEl.textContent=(frames*1000/(now-lastF)).toFixed(0); lastF=now; frames=0; }
-    // video texture
+    // update video texture
     if(video && video.readyState>=2){ gl.bindTexture(gl.TEXTURE_2D,TEX); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,video); }
-    // spin from wheels/drag + tiny audio kick
+    // spin from wheels + drag
     rot += (spinWheel + spinDrag) * dt; spinDrag *= 0.96;
     const zoom = Math.max(0.2, Math.min(4, zoomBase + zoomDrag)); zoomDrag *= 0.9;
-    // ease playbackRate back to 1
+    // ease audio playbackRate back to 1
     if(pointers.size===0 && audio && !audio.paused && Math.abs(audio.playbackRate-1)>0.001){ audio.playbackRate += (1 - audio.playbackRate) * 0.06; }
     gl.useProgram(P);
     gl.uniform2f(uR,canvas.width,canvas.height);
@@ -236,7 +243,12 @@
     gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
   }
   loop();
-})();
+})();document.getElementById('donate').onclick = () => {
+  // Replace with your actual Cash App link / tag
+  window.open("https://cash.app/$lightwell333", "_blank");
+};
+
 </script>
 </body>
 </html>
+
