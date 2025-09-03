@@ -3,21 +3,21 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Kaleidoscope — Audio Never Stops (Stable)</title>
+<title>Kaleidoscope — Separate Audio Wheel</title>
 <style>
   :root{--glass:rgba(12,14,18,.78);--line:#262c38;--fg:#eaf0ff;--muted:#a6b0c9}
   html,body{margin:0;height:100%;background:#000;overflow:hidden}
   canvas{display:block;width:100vw;height:100vh;touch-action:none;cursor:grab}
 
   /* Dock */
-  #dock{position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:40;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  #dock{position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:50;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   #dock button{background:#0b0e14;border:1px solid var(--line);color:#fff;border-radius:12px;padding:8px 12px;cursor:pointer}
   #fpsBox{background:#0b0e14;border:1px solid var(--line);border-radius:999px;padding:6px 10px;color:#9aa4c4}
   #donate{color:#00ff88;font-weight:700;box-shadow:0 0 12px rgba(0,255,136,.45)}
   #donate:hover{box-shadow:0 0 18px rgba(0,255,136,.8);transform:translateY(-1px)}
 
-  /* Panel */
-  #panel{position:fixed;left:50%;top:56px;transform:translateX(-50%);z-index:50;max-width:min(96vw,980px);
+  /* Panel (starts hidden; light) */
+  #panel{position:fixed;left:50%;top:56px;transform:translateX(-50%);z-index:40;max-width:min(96vw,980px);
          background:var(--glass);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:16px;padding:12px 14px}
   #panel.hidden{display:none}
   .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
@@ -28,16 +28,24 @@
   input[type="range"]{width:170px}
   input[type="file"],select,button{background:#0b0e14;border:1px solid var(--line);color:#fff;border-radius:10px;padding:6px 10px}
 
-  /* Dials */
-  .dials{display:flex;gap:16px;flex-wrap:wrap}
-  .dial{width:84px;height:84px;border-radius:50%;border:1px solid var(--line);position:relative;background:#0b0e14}
-  .dial .cap{position:absolute;inset:10px;border-radius:50%;background:radial-gradient(120% 120% at 30% 30%, #1a2236, #080a10);box-shadow:inset 0 0 0 1px #1c2436}
-  .dial .mark{position:absolute;left:50%;top:10px;width:2px;height:14px;background:#8aa2ff;transform-origin:50% 32px;border-radius:2px}
-  .dial b{position:absolute;bottom:-18px;left:0;right:0;text-align:center;color:#9aa4c4;font:500 12px system-ui}
+  /* AUDIO WHEEL */
+  #audioWheel{
+    position:fixed; right:14px; top:50%; transform:translateY(-50%);
+    width:160px; height:160px; border-radius:50%; z-index:60;
+    background:radial-gradient(120% 120% at 30% 30%, #1a2236, #090c12);
+    border:1px solid #243049; box-shadow:0 8px 30px rgba(0,0,0,.45), inset 0 0 0 1px #162033;
+    touch-action:none; user-select:none;
+  }
+  #audioWheel .tick{position:absolute; left:50%; top:8px; width:2px; height:18px; background:#8aa2ff; transform-origin:50% 72px; border-radius:2px;}
+  #audioWheel .cap{position:absolute; inset:16px; border-radius:50%; background:radial-gradient(120% 120% at 35% 35%, #0e1422, #070a10); box-shadow:inset 0 0 0 1px #1b2740;}
+  #audioWheel b{position:absolute; bottom:-20px; left:0; right:0; text-align:center; color:#a8b3d6; font:600 12px system-ui}
+  #rateRead{position:absolute; top:-22px; left:50%; transform:translateX(-50%); color:#a8f3ff; font:600 12px system-ui}
 
+  /* Tips */
   #tips{position:fixed;left:10px;bottom:10px;z-index:30;color:#9aa4c4;font:12px system-ui;background:rgba(0,0,0,.45);
         padding:7px 10px;border-radius:10px;border:1px solid var(--line)}
   .ok{color:#9cff9c} .bad{color:#ff9c9c}
+  @media (max-width:480px){ #audioWheel{width:136px;height:136px;} #audioWheel .tick{transform-origin:50% 60px;} }
 </style>
 </head>
 <body>
@@ -53,7 +61,15 @@
   <div id="fpsBox">FPS <span id="fps">—</span></div>
 </div>
 
-<!-- Panel (starts hidden to keep canvas clear) -->
+<!-- Audio Wheel (independent from image) -->
+<div id="audioWheel" title="Spin to scratch / pitch">
+  <div id="rateRead">1.00×</div>
+  <div class="cap"></div>
+  <div class="tick" id="awTick"></div>
+  <b>Audio Wheel</b>
+</div>
+
+<!-- Panel (hidden by default) -->
 <div id="panel" class="hidden">
   <div class="grid">
     <div class="card">
@@ -62,11 +78,6 @@
       <div class="row"><label>Wedges</label><input id="wedges" type="range" min="3" max="48" step="1" value="12"><span id="wedgesV">12</span></div>
       <div class="row"><label>Mirror</label>
         <select id="mirror"><option value="1" selected>On</option><option value="0">Off</option></select>
-      </div>
-      <div class="dials">
-        <div class="dial" id="dialSpeed" data-min="-4" data-max="4" data-value="0"><div class="cap"></div><div class="mark"></div><b>Speed</b></div>
-        <div class="dial" id="dialZoom"  data-min="0.2" data-max="4" data-value="1"><div class="cap"></div><div class="mark"></div><b>Zoom</b></div>
-        <div class="dial" id="dialTwist" data-min="-2" data-max="2" data-value="0"><div class="cap"></div><div class="mark"></div><b>Twist</b></div>
       </div>
     </div>
 
@@ -77,34 +88,33 @@
         <button id="play">▶️ Play</button>
         <button id="mic">🎤 Mic Off</button>
         <button id="tone">🔔 Test Tone</button>
-        <label>Vol</label><input id="vol" type="range" min="0" max="1" step="0.01" value="0.85">
+        <label>Vol</label><input id="vol" type="range" min="0" max="1" step="0.01" value="0.9">
       </div>
       <div class="row"><label>Filter</label>
-        <select id="fType"><option>lowpass</option><option selected>bandpass</option><option>highpass</option></select>
+        <select id="fType"><option selected>bandpass</option><option>lowpass</option><option>highpass</option></select>
         <label>Drive</label><input id="drive" type="range" min="0" max="1" step="0.01" value="0.3">
       </div>
-      <div class="row">
-        <span id="aStat" class="bad">No audio</span>
-      </div>
+      <div class="row"><span id="aStat" class="bad">No audio</span></div>
     </div>
 
     <div class="card">
       <h3>Recording</h3>
-      <div class="row">Records canvas + processed audio. Desktop Chrome recommended. iOS Safari may do video-only.</div>
+      <div class="row">Records canvas + processed audio (best on desktop Chrome). iOS Safari may do video-only.</div>
     </div>
   </div>
 </div>
 
-<div id="tips">Touch canvas: drag = rotate + scratch • pinch = zoom + filter/gain. Double-tap or press <b>H</b> for panel.</div>
+<div id="tips">Canvas controls image (drag=spin, pinch=zoom). Spin the <b>Audio Wheel</b> to scratch/pitch the song — totally separate from the visuals. Double-tap canvas or press <b>H</b> to show/hide panel.</div>
 
 <script>
 (() => {
-  /* ========= WebGL Kaleidoscope (unchanged visuals) ========= */
+  /* ========= WebGL Kaleidoscope (visual only) ========= */
   const canvas = document.getElementById('gl');
   const gl = canvas.getContext('webgl',{preserveDrawingBuffer:true,antialias:true});
   if(!gl){ alert('WebGL not available'); return; }
   function fit(){ const dpr=Math.min(1.5,devicePixelRatio||1); canvas.width=Math.floor(innerWidth*dpr); canvas.height=Math.floor(innerHeight*dpr); gl.viewport(0,0,canvas.width,canvas.height); }
   addEventListener('resize',fit,{passive:true}); fit();
+
   const vsrc=`attribute vec2 a; varying vec2 v; void main(){ v=a*0.5+0.5; gl_Position=vec4(a,0.0,1.0);} `;
   const fsrc=`precision highp float; varying vec2 v; uniform vec2 R; uniform float T; uniform sampler2D tex; uniform int HAS; uniform int K; uniform float ROT; uniform float ZOOM; uniform float TW; uniform int MIR;
     vec2 kale(vec2 p){ float asp=R.x/R.y; p.x*=asp; float ang=atan(p.y,p.x); float rad=length(p); float w=6.28318530718/float(K);
@@ -117,6 +127,8 @@
   const B=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,B); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
   const A=gl.getAttribLocation(P,'a'); gl.enableVertexAttribArray(A); gl.vertexAttribPointer(A,2,gl.FLOAT,false,0,0);
   const U=n=>gl.getUniformLocation(P,n); const uR=U('R'),uT=U('T'),uTex=U('tex'),uHAS=U('HAS'),uK=U('K'),uROT=U('ROT'),uZOOM=U('ZOOM'),uTW=U('TW'),uMIR=U('MIR'); gl.uniform1i(uTex,0);
+
+  // Texture & uploads
   const TEX=gl.createTexture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,TEX);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
@@ -126,13 +138,14 @@
 
   function uploadImage(img){ gl.bindTexture(gl.TEXTURE_2D,TEX); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img); HAS=true; }
 
-  /* ========= UI ========= */
+  /* ========= Panel + visual inputs ========= */
   const panel=document.getElementById('panel'), toggle=document.getElementById('toggle');
   const wedges=document.getElementById('wedges'), wedgesV=document.getElementById('wedgesV');
-  const mirror=document.getElementById('mirror'); const screenshot=document.getElementById('screenshot');
+  const mirror=document.getElementById('mirror');
   toggle.onclick=()=>panel.classList.toggle('hidden'); addEventListener('keydown',e=>{ if(e.key.toLowerCase()==='h') panel.classList.toggle('hidden'); });
   wedges.oninput=()=>wedgesV.textContent=wedges.value;
 
+  // Visual upload
   document.getElementById('visFile').addEventListener('change', e=>{
     const f=e.target.files?.[0]; if(!f) return;
     if(visURL){ URL.revokeObjectURL(visURL); visURL=null; }
@@ -141,136 +154,118 @@
     else if(f.type.startsWith('video/')){ video=document.createElement('video'); video.src=visURL; video.loop=true; video.muted=true; video.playsInline=true; video.onloadeddata=()=>video.play(); HAS=true; lastVideoTime=0; }
   });
 
-  /* ========= Dials ========= */
-  function dial(el){ const mark=el.querySelector('.mark'); let min=+el.dataset.min,max=+el.dataset.max,val=+el.dataset.value;
-    function set(){ const t=(val-min)/(max-min); const ang=-140+t*280; mark.style.transform=`translateX(-50%) rotate(${ang}deg)`; }
-    set(); let dragging=false,lastA=0;
-    function ang(e){ const r=el.getBoundingClientRect(); const cx=r.left+r.width/2, cy=r.top+r.height/2; const pt=e.touches?e.touches[0]:e; return Math.atan2(pt.clientY-cy,pt.clientX-cx)*180/Math.PI; }
-    el.addEventListener('pointerdown',e=>{dragging=true;lastA=ang(e);el.setPointerCapture?.(e.pointerId);e.preventDefault();});
-    addEventListener('pointermove',e=>{ if(!dragging) return; const a=ang(e); let d=a-lastA; if(d>180)d-=360; if(d<-180)d+=360; val=Math.min(max,Math.max(min,val+d/280*(max-min))); lastA=a; set(); el.dispatchEvent(new CustomEvent('input',{detail:val})); });
-    addEventListener('pointerup',()=>dragging=false); addEventListener('pointercancel',()=>dragging=false);
-    return {get:()=>val,set:v=>{val=Math.min(max,Math.max(min,v)); set(); el.dispatchEvent(new CustomEvent('input',{detail:val}));}};
-  }
-  const wSpeed=dial(document.getElementById('dialSpeed'));
-  const wZoom =dial(document.getElementById('dialZoom'));
-  const wTw   =dial(document.getElementById('dialTwist'));
-
-  /* ========= AUDIO (with unlock + keep-alive + watchdog) ========= */
+  /* ========= AUDIO (separate control via wheel) ========= */
   const AudioCtx=window.AudioContext||window.webkitAudioContext;
   const actx=new AudioCtx();
 
-  // Elements / nodes
   const gain=actx.createGain(); gain.gain.value=0.9;
   const filter=actx.createBiquadFilter(); filter.type='bandpass'; filter.frequency.value=900; filter.Q.value=1.0;
   const shaper=actx.createWaveShaper(); shaper.oversample='4x';
   function makeCurve(amount){ const n=1024,c=new Float32Array(n); const a=1+amount*40; for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=Math.tanh(x*a);} return c; }
   shaper.curve=makeCurve(0.3);
-
-  // 🔒 Keep-alive tone (inaudible) — prevents auto-suspend on mobile
-  const keepGain=actx.createGain(); keepGain.gain.value=0.001; // -60 dB
-  const keep = actx.createConstantSource(); keep.offset.value=0.0;
-  keep.connect(keepGain).connect(actx.destination);
-
-  // Route: source -> filter -> shaper -> gain -> destination (+ recorder)
   const recMix=actx.createMediaStreamDestination();
   filter.connect(shaper); shaper.connect(gain); gain.connect(actx.destination); gain.connect(recMix);
 
-  const audio=new Audio(); audio.loop=true; audio.preload='auto'; audio.playsInline=true; // iOS
-  let mediaSrc=null,audURL=null, userUnlocked=false;
+  // Keep-alive + unlock (prevents auto-stop)
+  const keepGain=actx.createGain(); keepGain.gain.value=0.001; const keep=actx.createConstantSource(); keep.offset.value=0;
+  keep.connect(keepGain).connect(actx.destination);
+  let unlocked=false;
+  const unlock=async()=>{ try{await actx.resume();}catch{} try{keep.start();}catch{} unlocked=true; window.removeEventListener('pointerdown',unlock); window.removeEventListener('touchstart',unlock); window.removeEventListener('keydown',unlock); };
+  window.addEventListener('pointerdown',unlock,{once:true,passive:true}); window.addEventListener('touchstart',unlock,{once:true,passive:true}); window.addEventListener('keydown',unlock,{once:true});
 
-  function connectAudioEl(){
-    if(mediaSrc){ try{mediaSrc.disconnect();}catch{} }
-    mediaSrc=actx.createMediaElementSource(audio);
-    mediaSrc.connect(filter);
-  }
+  const audio=new Audio(); audio.loop=true; audio.preload='auto'; audio.playsInline=true;
+  let mediaSrc=null,audURL=null;
+  function connectAudioEl(){ if(mediaSrc){ try{mediaSrc.disconnect();}catch{} } mediaSrc=actx.createMediaElementSource(audio); mediaSrc.connect(filter); }
 
   const aStat=document.getElementById('aStat');
   document.getElementById('audFile').addEventListener('change', async e=>{
     const f=e.target.files?.[0]; if(!f) return;
     if(audURL){ URL.revokeObjectURL(audURL); audURL=null; }
     audURL = URL.createObjectURL(f);
-    audio.src=audURL; connectAudioEl();
-    try{ await actx.resume(); await audio.play(); }catch{}
+    audio.src=audURL; connectAudioEl(); try{ await actx.resume(); await audio.play(); }catch{}
     document.getElementById('play').textContent='⏸️ Pause'; aStat.textContent='Playing'; aStat.className='ok';
   });
 
-  // 🔓 Unlock on first user gesture
-  const unlock = async () => {
-    try{ await actx.resume(); }catch{}
-    try{ keep.start(); }catch{}       // safe to call once
-    userUnlocked = true;
-    window.removeEventListener('pointerdown', unlock);
-    window.removeEventListener('touchstart', unlock);
-    window.removeEventListener('keydown', unlock);
-  };
-  window.addEventListener('pointerdown', unlock, {once:true, passive:true});
-  window.addEventListener('touchstart', unlock, {once:true, passive:true});
-  window.addEventListener('keydown', unlock, {once:true});
-
-  // ▶️ Play/Pause always resumes context first
-  document.getElementById('play').onclick = async (e) => {
-    try{ await actx.resume(); }catch{}
-    if(!audio.src){ aStat.textContent='Load audio or use Mic/Test Tone'; aStat.className='bad'; return; }
-    try{
-      if(audio.paused){ await audio.play(); e.target.textContent='⏸️ Pause'; aStat.textContent='Playing'; aStat.className='ok'; }
-      else { audio.pause(); e.target.textContent='▶️ Play'; aStat.textContent='Paused'; aStat.className='ok'; }
-    }catch{ aStat.textContent='Playback blocked — tap the screen once, then Play'; aStat.className='bad'; }
-  };
-
-  // Mic
+  // Play / Mic / Tone
+  document.getElementById('play').onclick=async(e)=>{ try{await actx.resume();}catch{} if(!audio.src){ aStat.textContent='Load audio or use Mic/Test Tone'; aStat.className='bad'; return;} try{ if(audio.paused){await audio.play(); e.target.textContent='⏸️ Pause'; aStat.textContent='Playing'; aStat.className='ok';} else {audio.pause(); e.target.textContent='▶️ Play'; aStat.textContent='Paused'; aStat.className='ok';} }catch{} };
   let micStream=null, usingMic=false;
-  document.getElementById('mic').onclick=async(e)=>{
-    if(usingMic){ if(micStream){micStream.getTracks().forEach(t=>t.stop());} usingMic=false; e.target.textContent='🎤 Mic Off'; aStat.textContent=audio.src?'Audio loaded':'No audio'; aStat.className=audio.src?'ok':'bad'; return; }
-    try{
-      await actx.resume();
-      micStream=await navigator.mediaDevices.getUserMedia({audio:true});
-      const mic=actx.createMediaStreamSource(micStream); mic.connect(filter);
-      usingMic=true; e.target.textContent='🎤 Mic On'; aStat.textContent='Mic live'; aStat.className='ok';
-    }catch(err){ alert('Mic error: '+err.message); }
-  };
-
-  // Test tone
-  document.getElementById('tone').onclick=()=>{
-    (async()=>{try{await actx.resume();}catch{}})();
-    const osc=actx.createOscillator(), env=actx.createGain();
-    osc.type='sawtooth'; osc.frequency.value=220; env.gain.value=0;
-    osc.connect(env); env.connect(filter);
-    const t=actx.currentTime;
-    env.gain.setValueAtTime(0,t);
-    env.gain.linearRampToValueAtTime(0.9,t+0.01);
-    env.gain.exponentialRampToValueAtTime(0.0001,t+0.6);
-    osc.start(t); osc.stop(t+0.65);
-    aStat.textContent='Test tone played'; aStat.className='ok';
-  };
-
-  // User controls
+  document.getElementById('mic').onclick=async(e)=>{ if(usingMic){ if(micStream){micStream.getTracks().forEach(t=>t.stop());} usingMic=false; e.target.textContent='🎤 Mic Off'; aStat.textContent=audio.src?'Audio loaded':'No audio'; aStat.className=audio.src?'ok':'bad'; return;}
+    try{ await actx.resume(); micStream=await navigator.mediaDevices.getUserMedia({audio:true}); const mic=actx.createMediaStreamSource(micStream); mic.connect(filter); usingMic=true; e.target.textContent='🎤 Mic On'; aStat.textContent='Mic live'; aStat.className='ok'; }catch(err){ alert('Mic error: '+err.message); } };
+  document.getElementById('tone').onclick=()=>{ (async()=>{try{await actx.resume();}catch{}})(); const osc=actx.createOscillator(), env=actx.createGain(); osc.type='sawtooth'; osc.frequency.value=220; env.gain.value=0; osc.connect(env); env.connect(filter); const t=actx.currentTime; env.gain.setValueAtTime(0,t); env.gain.linearRampToValueAtTime(0.9,t+0.01); env.gain.exponentialRampToValueAtTime(0.0001,t+0.6); osc.start(t); osc.stop(t+0.65); aStat.textContent='Test tone played'; aStat.className='ok'; };
   document.getElementById('vol').oninput=e=>{ gain.gain.value=+e.target.value; };
   document.getElementById('fType').onchange=e=>{ filter.type=e.target.value; };
   document.getElementById('drive').oninput=e=>{ shaper.curve=makeCurve(+e.target.value); };
 
-  /* ========= Recorder ========= */
+  /* ========= AUDIO WHEEL logic (independent scratch) ========= */
+  const wheel = document.getElementById('audioWheel');
+  const tick  = document.getElementById('awTick');
+  const rateRead = document.getElementById('rateRead');
+
+  let awDragging=false, awLastA=0, awSpinVel=0;  // spin velocity from finger
+  function angleAt(e){
+    const r=wheel.getBoundingClientRect();
+    const cx=r.left+r.width/2, cy=r.top+r.height/2;
+    const x=(e.touches?e.touches[0].clientX:e.clientX)-cx;
+    const y=(e.touches?e.touches[0].clientY:e.clientY)-cy;
+    return Math.atan2(y,x); // radians
+  }
+  function setTickByRate(rate){
+    // Map 0.25x..3x to -140..+140 deg for display
+    const t=(rate-0.25)/(3-0.25);
+    const deg=-140 + t*280;
+    tick.style.transform=`translateX(-50%) rotate(${deg}deg)`;
+    rateRead.textContent = (Math.round(rate*100)/100).toFixed(2)+'×';
+  }
+
+  wheel.addEventListener('pointerdown',e=>{
+    awDragging=true; wheel.setPointerCapture?.(e.pointerId);
+    awLastA=angleAt(e);
+    e.preventDefault();
+  }, {passive:false});
+  addEventListener('pointermove',e=>{
+    if(!awDragging) return;
+    const a=angleAt(e);
+    let d=a-awLastA;
+    if(d> Math.PI) d-=2*Math.PI;
+    if(d<-Math.PI) d+=2*Math.PI;
+    awSpinVel += d * 2.0;                 // add to wheel velocity
+    awLastA=a;
+  }, {passive:true});
+  addEventListener('pointerup',()=>{awDragging=false;});
+  addEventListener('pointercancel',()=>{awDragging=false;});
+
+  // Audio target rate derived from wheel velocity (with damping)
+  let targetRate = 1.0;
+  function updateAudioFromWheel(dt){
+    // decay velocity so it coasts
+    awSpinVel *= Math.pow(0.94, dt*60);
+    // map velocity to rate (clamped)
+    targetRate = Math.max(0.25, Math.min(3.0, 1 + awSpinVel*0.6));
+    if(audio && !audio.paused && audio.playbackRate!==undefined){
+      audio.playbackRate += (targetRate - audio.playbackRate)*0.18;
+    }
+    setTickByRate(targetRate);
+    // subtle sound tone follow: change filter with rate
+    const cut = 500 + (targetRate-0.25)/(3-0.25)*(12000-500);
+    filter.frequency.setTargetAtTime(cut, actx.currentTime, 0.05);
+  }
+  setTickByRate(1.0);
+
+  /* ========= Recorder, Screenshot, Donate ========= */
+  document.getElementById('screenshot').onclick=()=>{ const url=canvas.toDataURL('image/png'); const a=document.createElement('a'); a.href=url; a.download=`kaleidoscope_${Date.now()}.png`; a.click(); };
+
   const recBtn=document.getElementById('rec'), dl=document.getElementById('download');
   function pickMime(){ const list=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm']; for(const m of list){ if(window.MediaRecorder?.isTypeSupported?.(m)) return m; } return null; }
   const mime=pickMime(); if(!mime){ recBtn.disabled=true; recBtn.title='Recording not supported here'; }
   let mr=null, chunks=[];
-  recBtn.onclick=()=>{ if(!mime){ alert('Recording not supported. Try desktop Chrome.'); return; }
-    if(mr && mr.state==='recording'){ mr.stop(); return; }
-    try{
-      const stream=canvas.captureStream(60);
-      const at=recMix.stream.getAudioTracks(); if(at.length) stream.addTrack(at[0]);
-      mr=new MediaRecorder(stream,{mimeType:mime});
-      chunks=[]; mr.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); };
-      mr.onstop=()=>{ const blob=new Blob(chunks,{type:'video/webm'}); const url=URL.createObjectURL(blob); dl.href=url; dl.style.display='inline'; dl.textContent='Download'; dl.download=`kaleido_${Date.now()}.webm`; recBtn.textContent='⏺ Start'; };
-      mr.start(); recBtn.textContent='⏹ Stop'; dl.style.display='none';
-    }catch(err){ alert('Recording failed: '+err.message); }
-  };
+  recBtn.onclick=()=>{ if(!mime){ alert('Recording not supported. Try desktop Chrome.'); return; } if(mr && mr.state==='recording'){ mr.stop(); return; } try{ const stream=canvas.captureStream(60); const at=recMix.stream.getAudioTracks(); if(at.length) stream.addTrack(at[0]); mr=new MediaRecorder(stream,{mimeType:mime}); chunks=[]; mr.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); }; mr.onstop=()=>{ const blob=new Blob(chunks,{type:'video/webm'}); const url=URL.createObjectURL(blob); dl.href=url; dl.style.display='inline'; dl.textContent='Download'; dl.download=`kaleido_${Date.now()}.webm`; recBtn.textContent='⏺ Start'; }; mr.start(); recBtn.textContent='⏹ Stop'; dl.style.display='none'; }catch(err){ alert('Recording failed: '+err.message); } };
 
-  /* ========= Touch: image + sound together ========= */
+  document.getElementById('donate').addEventListener('click',()=>{ window.open('https://cash.app/$lightwell333','_blank','noopener'); });
+
+  /* ========= Canvas gestures (image only; panel toggles) ========= */
   const touchHidePanel = ()=>{ if(!panel.classList.contains('hidden')) panel.classList.add('hidden'); };
   let pointers=new Map(), lastDist=0, lastTap=0;
-  let spinDrag=0, zoomBase=1, zoomDrag=0;
-
-  function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+  let spinDrag=0, zoomBase=1, zoomDrag=0, twist=0;
 
   canvas.addEventListener('pointerdown',async e=>{
     pointers.set(e.pointerId,e); canvas.setPointerCapture?.(e.pointerId);
@@ -279,81 +274,51 @@
     try{ await actx.resume(); }catch{}
     if(video && video.play) try{ await video.play(); }catch{}
   });
-
   canvas.addEventListener('pointermove',e=>{
     if(!pointers.has(e.pointerId)) return;
     const prev=pointers.get(e.pointerId); pointers.set(e.pointerId,e);
     if(pointers.size===1){
-      const dx=e.clientX-prev.clientX;
-      spinDrag+=dx*0.002; // visual rotation
-      if(!audio.paused && audio.playbackRate!==undefined){ audio.playbackRate = clamp(1 + dx*0.003, 0.25, 3); }
+      const dx=e.clientX-prev.clientX; spinDrag+=dx*0.002;           // visual rotation only
     }else if(pointers.size===2){
-      const [a,b]=[...pointers.values()];
-      const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
-      if(!lastDist) lastDist=d;
-      const dd=d-lastDist; lastDist=d;
-      zoomDrag += dd*0.003; // visual zoom
-      // audio maps to same pinch
-      const zoomNow = clamp(zoomBase + zoomDrag, 0.2, 4);
-      const cut = 200 + (zoomNow-0.2)/(4-0.2)*(12000-200);
-      filter.frequency.setTargetAtTime(cut, actx.currentTime, 0.03);
-      const g = 0.4 + (zoomNow-0.2)/(4-0.2)*1.6;
-      gain.gain.setTargetAtTime(g, actx.currentTime, 0.03);
+      const [a,b]=[...pointers.values()]; const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+      if(!lastDist) lastDist=d; const dd=d-lastDist; lastDist=d; zoomDrag+=dd*0.003; // visual zoom only
     }
   });
   function endPtr(e){ pointers.delete(e.pointerId); if(pointers.size<2) lastDist=0; }
-  canvas.addEventListener('pointerup',endPtr);
-  canvas.addEventListener('pointercancel',endPtr);
-  canvas.addEventListener('pointerleave',endPtr);
-
-  /* ========= Donate ========= */
-  document.getElementById('donate').addEventListener('click',()=>{ window.open('https://cash.app/$lightwell333','_blank','noopener'); });
-
-  /* ========= Watchdog / visibility resume ========= */
-  async function watchdog(){
-    // revive AudioContext
-    if(actx.state !== 'running'){ try{ await actx.resume(); }catch{} }
-    // nudge media element if loaded but paused unintentionally
-    if(userUnlocked && audio.src && audio.paused){
-      try{ await audio.play(); }catch{}
-    }
-  }
-  setInterval(watchdog, 10000);
-  document.addEventListener('visibilitychange', async ()=>{
-    if(document.visibilityState==='visible'){ try{ await actx.resume(); }catch{} }
-  });
+  canvas.addEventListener('pointerup',endPtr); canvas.addEventListener('pointercancel',endPtr); canvas.addEventListener('pointerleave',endPtr);
 
   /* ========= FPS + Render loop ========= */
   const fpsEl=document.getElementById('fps'); let lastF=performance.now(), frames=0;
   let t0=performance.now(); let rot=0;
+  function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
   function loop(){
     requestAnimationFrame(loop);
     const now=performance.now(); const dt=(now-t0)/1000; t0=now;
     frames++; if(now-lastF>500){ fpsEl.textContent=(frames*1000/(now-lastF)).toFixed(0); lastF=now; frames=0; }
 
-    if(video && video.readyState>=2){
-      if(video.currentTime !== lastVideoTime){
-        gl.bindTexture(gl.TEXTURE_2D,TEX);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
-        gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,video);
-        lastVideoTime = video.currentTime;
-      }
+    // Update video texture only when new frame
+    if(video && video.readyState>=2 && video.currentTime!==lastVideoTime){
+      gl.bindTexture(gl.TEXTURE_2D,TEX); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,video); lastVideoTime=video.currentTime;
     }
 
-    // visuals
-    rot += (wSpeed.get() + spinDrag) * dt; spinDrag *= 0.96;
-    const zoom = clamp(wZoom.get() + zoomDrag, 0.2, 4); zoomDrag *= 0.9;
+    // Visuals
+    rot += spinDrag * dt; spinDrag *= 0.96;
+    const zoom = clamp(zoomBase + zoomDrag, 0.2, 4); zoomDrag *= 0.9;
 
     gl.useProgram(P);
     gl.uniform2f(uR,canvas.width,canvas.height);
     gl.uniform1f(uT,now/1000);
     gl.uniform1i(uHAS,HAS?1:0);
     gl.uniform1i(uK,Math.max(2,parseInt(wedges.value,10)));
-    gl.uniform1f(uROT,rot);
+    gl.uniform1f(uROT,rot + 0.0*twist);
     gl.uniform1f(uZOOM,zoom);
-    gl.uniform1f(uTW,wTw.get());
+    gl.uniform1f(uTW,twist);
     gl.uniform1i(uMIR, mirror.value==='1'?1:0);
     gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+
+    // Audio Wheel → audio rate/filter
+    updateAudioFromWheel(dt);
   }
   loop();
 })();
