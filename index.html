@@ -1,94 +1,244 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<title>Perfect Kaleidoscope</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<title>Kaleidoscope — Core + Touch-Linked Audio</title>
 <style>
   html,body{margin:0;height:100%;background:#000;overflow:hidden}
   canvas{display:block;width:100vw;height:100vh;touch-action:none;cursor:grab}
-  #controls{position:fixed;top:10px;left:50%;transform:translateX(-50%);
-    background:rgba(20,20,25,.75);padding:8px 12px;border-radius:12px;
-    font-family:sans-serif;color:#fff;z-index:50}
-  #controls button{margin:0 4px;padding:6px 10px;border-radius:8px;
-    border:1px solid #444;background:#111;color:#fff}
+  #ui{position:fixed;left:50%;top:10px;transform:translateX(-50%);
+      display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+      background:rgba(16,18,24,.78);color:#eaf0ff;font:14px system-ui,Segoe UI,Roboto;
+      border:1px solid #272d3a;border-radius:12px;padding:8px 10px;z-index:10}
+  #ui label{opacity:.8;margin-right:6px}
+  #ui input[type="range"], #ui select, #ui button, #ui input[type="file"]{
+    background:#0b0d12;color:#fff;border:1px solid #272d3a;border-radius:10px;padding:6px 8px
+  }
+  #hint{position:fixed;left:10px;bottom:10px;color:#9aa5c6;background:rgba(0,0,0,.5);
+        border:1px solid #272d3a;border-radius:10px;padding:8px 10px;font:12px system-ui;z-index:9}
 </style>
 </head>
 <body>
 <canvas id="gl"></canvas>
 
-<div id="controls">
-  <input type="file" id="img" accept="image/*,video/*,audio/*" />
-  <button id="rec">⏺ Start Rec</button>
-  <a id="dl" style="display:none" download>Download</a>
+<div id="ui">
+  <label>Audio</label><input id="aud" type="file" accept="audio/*"/>
+  <button id="mic">🎤 Mic Off</button>
+  <button id="play">▶️ Play</button>
+  <label>Vol</label><input id="vol" type="range" min="0" max="1" step="0.01" value="0.8"/>
+  <label>Wedges</label><input id="wedges" type="range" min="3" max="48" step="1" value="12"/>
+  <button id="mirror">Mirror: On</button>
 </div>
 
+<div id="hint">Touch: 1-finger drag = spin (also speeds audio). 2-finger pinch = zoom (also changes filter). Double-tap canvas to hide/show controls.</div>
+
 <script>
-const canvas=document.getElementById("gl");
-const gl=canvas.getContext("webgl",{preserveDrawingBuffer:true});
-function fit(){canvas.width=innerWidth;canvas.height=innerHeight;gl.viewport(0,0,canvas.width,canvas.height);}
-addEventListener("resize",fit);fit();
+(() => {
+  // ===== WebGL Kaleidoscope =====
+  const canvas = document.getElementById('gl');
+  const gl = canvas.getContext('webgl', {preserveDrawingBuffer:true, antialias:true});
+  if(!gl){ alert('WebGL not available'); return; }
 
-// shader
-const vsrc=`attribute vec2 a;varying vec2 v;void main(){v=a*0.5+0.5;gl_Position=vec4(a,0,1);}`;
-const fsrc=`precision highp float;varying vec2 v;uniform sampler2D tex;uniform int hasTex;
-uniform vec2 res;uniform float t;uniform float rot;uniform float zoom;uniform int K;
-vec2 kale(vec2 p){float asp=res.x/res.y;p.x*=asp;float ang=atan(p.y,p.x),rad=length(p);
-float w=6.283185/float(K);ang=mod(ang,w);ang=abs(ang-0.5*w)-0.5*w;ang+=rot;vec2 q=vec2(cos(ang),sin(ang))*rad;q.x/=asp;q*=zoom;return q*0.5+0.5;}
-vec3 rainbow(vec2 uv){return 0.5+0.5*cos(vec3(0,2.1,4.2)+uv.xyx*6.0+t*0.3);}
-void main(){vec2 uv=kale(v*2.-1.);vec3 c=hasTex==1?texture2D(tex,uv).rgb:rainbow(uv);gl_FragColor=vec4(c,1);}
-`;
-function compile(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
-if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw gl.getShaderInfoLog(s);return s;}
-const prog=gl.createProgram();
-gl.attachShader(prog,compile(gl.VERTEX_SHADER,vsrc));
-gl.attachShader(prog,compile(gl.FRAGMENT_SHADER,fsrc));
-gl.linkProgram(prog);gl.useProgram(prog);
-const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
-gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
-const a=gl.getAttribLocation(prog,"a");gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,2,gl.FLOAT,0,0,0);
-const U=n=>gl.getUniformLocation(prog,n);
-const uRes=U("res"),uT=U("t"),uTex=U("tex"),uHas=U("hasTex"),uRot=U("rot"),uZoom=U("zoom"),uK=U("K");
-gl.uniform1i(uTex,0);
+  function fit(){
+    const dpr = Math.min(2, window.devicePixelRatio||1);
+    canvas.width = Math.floor(innerWidth*dpr);
+    canvas.height = Math.floor(innerHeight*dpr);
+    gl.viewport(0,0,canvas.width,canvas.height);
+  }
+  addEventListener('resize', fit, {passive:true}); fit();
 
-let rot=0,zoom=1,K=12,tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
-gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
-gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
-gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
-gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([0,0,0,255]));
-let hasTex=0,video=null;
-document.getElementById("img").onchange=e=>{
- const f=e.target.files[0];if(!f)return;
- if(f.type.startsWith("image/")){video=null;const img=new Image();img.onload=()=>{gl.bindTexture(gl.TEXTURE_2D,tex);
-  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);hasTex=1;};img.src=URL.createObjectURL(f);}
- else if(f.type.startsWith("video/")){video=document.createElement("video");video.src=URL.createObjectURL(f);video.loop=true;video.muted=true;video.play();hasTex=1;}
-};
+  const vsrc = `
+    attribute vec2 a; varying vec2 v;
+    void main(){ v = a*0.5+0.5; gl_Position = vec4(a,0.0,1.0); }
+  `;
+  const fsrc = `
+    precision highp float; varying vec2 v;
+    uniform vec2 u_res; uniform sampler2D u_tex; uniform int u_hasTex;
+    uniform float u_time, u_rot, u_zoom; uniform int u_k; uniform int u_mirror;
+    vec2 kale(vec2 p){
+      float asp = u_res.x/u_res.y; p.x *= asp;
+      float ang = atan(p.y,p.x), rad = length(p);
+      float w = 6.28318530718/float(u_k);
+      ang = mod(ang, w);
+      if(u_mirror==1){ ang = abs(ang - 0.5*w) - 0.5*w; } // seam-free flip
+      ang += u_rot;
+      vec2 q = vec2(cos(ang), sin(ang))*rad; q.x/=asp; q*=u_zoom;
+      return q*0.5 + 0.5;
+    }
+    vec3 rainbow(vec2 uv){ return 0.5 + 0.5*cos(vec3(0.0,2.094,4.188) + u_time*0.25 + vec3(uv,0.0)*6.0); }
+    void main(){
+      vec2 uv = kale(v*2.0-1.0);
+      vec3 col = (u_hasTex==1) ? texture2D(u_tex, uv).rgb : rainbow(uv);
+      gl_FragColor = vec4(col,1.0);
+    }
+  `;
+  function sh(t,src){ const s=gl.createShader(t); gl.shaderSource(s,src); gl.compileShader(s);
+    if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, vsrc));
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fsrc));
+  gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
 
-let last=performance.now();
-function loop(){requestAnimationFrame(loop);const now=performance.now(),dt=(now-last)/1000;last=now;rot+=dt*0.4;
-if(video&&video.readyState>=2){gl.bindTexture(gl.TEXTURE_2D,tex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,video);}
-gl.uniform2f(uRes,canvas.width,canvas.height);gl.uniform1f(uT,now/1000);gl.uniform1i(uHas,hasTex);
-gl.uniform1f(uRot,rot);gl.uniform1f(uZoom,zoom);gl.uniform1i(uK,K);
-gl.drawArrays(gl.TRIANGLE_STRIP,0,4);} loop();
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  const a = gl.getAttribLocation(prog,'a');
+  gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);
 
-// touch gestures
-let pointers=new Map(),lastDist=0;
-canvas.addEventListener("pointerdown",e=>{pointers.set(e.pointerId,e);});
-canvas.addEventListener("pointermove",e=>{if(!pointers.has(e.pointerId))return;
-pointers.set(e.pointerId,e);if(pointers.size==1){rot+=e.movementX*0.01;}
-else if(pointers.size==2){const [a,b]=[...pointers.values()];
-const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
-if(!lastDist)lastDist=d;zoom*=1+(d-lastDist)*0.003;lastDist=d;}});
-canvas.addEventListener("pointerup",e=>{pointers.delete(e.pointerId);lastDist=0;});
+  const U=n=>gl.getUniformLocation(prog,n);
+  const u_res=U('u_res'), u_time=U('u_time'), u_tex=U('u_tex'), u_hasTex=U('u_hasTex'),
+        u_rot=U('u_rot'), u_zoom=U('u_zoom'), u_k=U('u_k'), u_mirror=U('u_mirror');
+  gl.uniform1i(u_tex, 0);
 
-// recorder
-const recBtn=document.getElementById("rec"),dl=document.getElementById("dl");let mr=null,chunks=[];
-recBtn.onclick=()=>{if(mr&&mr.state==="recording"){mr.stop();return;}
-try{const stream=canvas.captureStream(60);mr=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9'});
-chunks=[];mr.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
-mr.onstop=()=>{const blob=new Blob(chunks,{type:'video/webm'});const url=URL.createObjectURL(blob);
-dl.href=url;dl.style.display="inline";dl.textContent="Download";dl.download=`kaleido_${Date.now()}.webm`;recBtn.textContent="⏺ Start Rec";};
-mr.start();recBtn.textContent="⏹ Stop";dl.style.display="none";}catch(err){alert("Recording not supported: "+err.message);}};
+  // Texture (safe defaults)
+  const tex = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([24,24,24,255]));
+  let hasTex = 0;
+
+  // Optional: you can extend to load an image/video texture later if you like
+
+  // ===== Audio: file/mic + touch link =====
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  const actx = new AudioCtx();
+  const gain = actx.createGain(); gain.gain.value = 0.8;
+  const filter = actx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 1200; filter.Q.value = 0.9;
+  gain.connect(actx.destination);
+  filter.connect(gain);
+
+  const audio = new Audio(); audio.loop=true; audio.crossOrigin='anonymous';
+  let srcNode = null; function useAudioEl(){
+    if(srcNode){ try{srcNode.disconnect();}catch{} }
+    srcNode = actx.createMediaElementSource(audio);
+    srcNode.connect(filter);
+  }
+
+  const audFile = document.getElementById('aud');
+  audFile.onchange = e=>{
+    const f = e.target.files?.[0]; if(!f) return;
+    const url = URL.createObjectURL(f);
+    audio.src = url; useAudioEl(); actx.resume(); audio.play();
+    playBtn.textContent = '⏸ Pause';
+  };
+
+  let micStream=null, usingMic=false;
+  const micBtn = document.getElementById('mic');
+  micBtn.onclick = async ()=>{
+    if(usingMic){
+      if(micStream){ micStream.getTracks().forEach(t=>t.stop()); }
+      usingMic=false; micBtn.textContent='🎤 Mic Off';
+      return;
+    }
+    try{
+      micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+      const mic = actx.createMediaStreamSource(micStream);
+      mic.connect(filter);
+      usingMic=true; micBtn.textContent='🎤 Mic On';
+      actx.resume();
+    }catch(e){ alert('Mic permission denied/unavailable: '+e.message); }
+  };
+
+  const playBtn = document.getElementById('play');
+  playBtn.onclick = ()=>{
+    actx.resume();
+    if(audio.paused){ audio.play(); playBtn.textContent='⏸ Pause'; }
+    else { audio.pause(); playBtn.textContent='▶️ Play'; }
+  };
+  document.getElementById('vol').oninput = e=>{ gain.gain.value = +e.target.value; };
+
+  // ===== Controls for kaleidoscope =====
+  const wedgesEl = document.getElementById('wedges');
+  let K = +wedgesEl.value;
+  wedgesEl.oninput = ()=>{ K = +wedgesEl.value; };
+
+  const mirrorBtn = document.getElementById('mirror');
+  let mirrorOn = true;
+  mirrorBtn.onclick = ()=>{ mirrorOn = !mirrorOn; mirrorBtn.textContent = 'Mirror: ' + (mirrorOn?'On':'Off'); };
+
+  // ===== Touch gestures: also bend audio =====
+  let rot = 0, zoom = 1;
+  let pointers = new Map(), lastDist = 0, lastTap=0;
+
+  canvas.addEventListener('pointerdown', e=>{
+    pointers.set(e.pointerId, e);
+    canvas.setPointerCapture?.(e.pointerId);
+    // detect double-tap to toggle UI
+    const now = performance.now();
+    if(now - lastTap < 350){
+      document.getElementById('ui').style.display =
+        (document.getElementById('ui').style.display==='none'?'flex':'none');
+    }
+    lastTap = now;
+  });
+
+  canvas.addEventListener('pointermove', e=>{
+    if(!pointers.has(e.pointerId)) return;
+    const prev = pointers.get(e.pointerId);
+    pointers.set(e.pointerId, e);
+
+    if(pointers.size===1){
+      // Spin visual
+      const dx = e.clientX - prev.clientX;
+      rot += dx * 0.01;
+
+      // Also bend audio speed a bit (scratch feel)
+      const bend = Math.max(0.25, Math.min(2.0, 1 + dx*0.002));
+      if(!isNaN(bend) && isFinite(bend) && audio.playbackRate !== undefined){
+        audio.playbackRate = bend;
+      }
+    } else if(pointers.size===2){
+      // Pinch zoom visual
+      const [a,b] = [...pointers.values()];
+      const d = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+      if(!lastDist) lastDist = d;
+      const dd = d - lastDist; lastDist = d;
+      zoom *= (1 + dd*0.003);
+      zoom = Math.max(0.2, Math.min(5, zoom));
+
+      // Map zoom to audio filter (more zoom -> brighter)
+      const f = Math.max(80, Math.min(12000, 1200 * zoom));
+      filter.frequency.setTargetAtTime(f, actx.currentTime, 0.02);
+    }
+  }, {passive:false});
+
+  function endPtr(e){ pointers.delete(e.pointerId); if(pointers.size<2) lastDist=0; }
+  canvas.addEventListener('pointerup', endPtr);
+  canvas.addEventListener('pointercancel', endPtr);
+  canvas.addEventListener('pointerleave', endPtr);
+
+  // ===== Render loop =====
+  let t0 = performance.now();
+  function frame(){
+    requestAnimationFrame(frame);
+    const now = performance.now();
+    const dt = (now - t0)/1000; t0 = now;
+
+    // Ease audio speed gently back to 1.0 when not dragging
+    if(pointers.size===0 && Math.abs(audio.playbackRate-1) > 0.001){
+      audio.playbackRate += (1 - audio.playbackRate) * 0.06;
+    }
+
+    gl.useProgram(prog);
+    gl.uniform2f(u_res, canvas.width, canvas.height);
+    gl.uniform1f(u_time, now/1000);
+    gl.uniform1i(u_hasTex, hasTex?1:0);
+    gl.uniform1f(u_rot, rot);
+    gl.uniform1f(u_zoom, zoom);
+    gl.uniform1i(u_k, Math.max(2,K));
+    gl.uniform1i(u_mirror, mirrorOn?1:0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+  frame();
+})();
 </script>
 </body>
 </html>
