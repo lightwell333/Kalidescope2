@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Psy Kaleidoscope — Stable AV + Donate</title>
+<title>Psy Kaleidoscope — AV + Turntable Audio + Donate</title>
 <style>
   :root{--glass:rgba(12,14,18,.78);--line:#262c38;--fg:#eaf0ff;--muted:#a6b0c9}
   html,body{margin:0;height:100%;background:#000;overflow:hidden}
@@ -47,8 +46,8 @@
 <div id="dock">
   <button id="toggle" title="Show/Hide Controls (H)">🎛️ Controls</button>
   <button id="screenshot" title="Save PNG">📷 Screenshot</button>
-  <button id="rec" title="Record video + audio">⏺ Start</button>
-  <a id="download" download style="display:none">Download</a>
+  <button id="recAV" title="Record video + audio">⏺ Start AV</button>
+  <a id="downloadAV" download style="display:none">Download AV</a>
   <button id="donate" title="Support">💚 Donate</button>
   <div id="fpsBox">FPS <span id="fps">—</span></div>
 </div>
@@ -71,7 +70,7 @@
     </div>
 
     <div class="card">
-      <h3>Audio</h3>
+      <h3>Audio (Turntable-style)</h3>
       <div class="row"><label>Upload Audio</label><input id="audFile" type="file" accept="audio/*"></div>
       <div class="row">
         <button id="play">▶️ Play</button>
@@ -79,9 +78,21 @@
         <button id="tone">🔔 Test Tone</button>
         <label>Vol</label><input id="vol" type="range" min="0" max="1" step="0.01" value="0.85">
       </div>
+      <div class="row">
+        <label>Link mode</label>
+        <select id="linkMode">
+          <option value="speed">Rotation → speed (pitch)</option>
+          <option value="filter" selected>Zoom → low-pass cutoff</option>
+          <option value="pan">X position → stereo pan</option>
+          <option value="gain">Zoom → volume gain</option>
+          <option value="echo">Rotation → echo delay</option>
+          <option value="dist">Zoom → distortion</option>
+        </select>
+        <span class="muted" style="color:#a6b0c9">Swirl: circle to rotate, move in/out to zoom.</span>
+      </div>
       <div class="row"><label>Filter</label>
         <select id="fType"><option>lowpass</option><option selected>bandpass</option><option>highpass</option></select>
-        <label>Drive</label><input id="drive" type="range" min="0" max="1" step="0.01" value="0.3">
+        <label>Drive</label><input id="drive" type="range" min="0" max="1" step="0.01" value="0.4">
       </div>
       <div class="dials">
         <div class="dial" id="dialScratch" data-min="-2" data-max="2" data-value="0"><div class="cap"></div><div class="mark"></div><b>Scratch</b></div>
@@ -95,13 +106,17 @@
     </div>
 
     <div class="card">
-      <h3>Recording</h3>
-      <div id="recNote" class="row">Records canvas + processed audio. Desktop Chrome recommended. iOS Safari may do video-only.</div>
+      <h3>⏺️ Recording</h3>
+      <div class="row"><label>Processed audio only</label>
+        <div><button id="recAudio">Start</button> <button id="stopAudio" disabled>Stop + Save</button></div>
+      </div>
+      <div class="row"><label>Download</label><a id="dlAudio" class="muted" href="#">—</a></div>
+      <div class="row muted">AV recorder (top bar) captures canvas + processed audio (best on desktop Chrome). iOS Safari may do video-only.</div>
     </div>
   </div>
 </div>
 
-<div id="tips">Touch: 1-finger drag = spin (scratches audio). Pinch = zoom (opens filter). Double-tap canvas toggles panel. Press <b>H</b> to hide/show.</div>
+<div id="tips">Swirl: 1-finger circle = rotate (pitch). In/out = zoom (filter/dist/gain). Double-tap canvas toggles panel. Press <b>H</b> to hide/show.</div>
 
 <script>
 (() => {
@@ -111,7 +126,7 @@
   if(!gl){ alert('WebGL not available'); return; }
 
   function fit(){
-    const dpr = Math.min(1.5, window.devicePixelRatio||1); // cap DPR to reduce VRAM/memory
+    const dpr = Math.min(1.5, window.devicePixelRatio||1); // cap DPR for stability
     canvas.width  = Math.floor(innerWidth * dpr);
     canvas.height = Math.floor(innerHeight * dpr);
     gl.viewport(0,0,canvas.width,canvas.height);
@@ -131,7 +146,7 @@
   const A=gl.getAttribLocation(P,'a'); gl.enableVertexAttribArray(A); gl.vertexAttribPointer(A,2,gl.FLOAT,false,0,0);
   const U=n=>gl.getUniformLocation(P,n); const uR=U('R'),uT=U('T'),uTex=U('tex'),uHAS=U('HAS'),uK=U('K'),uROT=U('ROT'),uZOOM=U('ZOOM'),uTW=U('TW'),uMIR=U('MIR'); gl.uniform1i(uTex,0);
 
-  // Texture + stability improvements
+  // Texture (stable)
   const TEX=gl.createTexture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,TEX);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
@@ -146,30 +161,23 @@
     HAS=true;
   }
 
-  /* ========= UI ========= */
+  // Panel + fields
   const panel=document.getElementById('panel'), toggle=document.getElementById('toggle');
   const wedges=document.getElementById('wedges'), wedgesV=document.getElementById('wedgesV');
-  const mirror=document.getElementById('mirror'), touchAudio=document.getElementById('touchAudio');
-  const screenshot=document.getElementById('screenshot');
+  const mirror=document.getElementById('mirror'); const screenshot=document.getElementById('screenshot');
+  const linkModeEl=document.getElementById('linkMode');
   toggle.onclick=()=>panel.classList.toggle('hidden'); addEventListener('keydown',e=>{ if(e.key.toLowerCase()==='h') panel.classList.toggle('hidden'); });
   wedges.oninput=()=>wedgesV.textContent=wedges.value;
 
-  // Visual upload with URL revocation to avoid leaks
+  // Visual upload (revoke URLs to avoid leaks)
   document.getElementById('visFile').addEventListener('change', e=>{
     const f=e.target.files?.[0]; if(!f) return;
     if(currentVisURL){ URL.revokeObjectURL(currentVisURL); currentVisURL=null; }
     currentVisURL = URL.createObjectURL(f);
     if(f.type.startsWith('image/')){
-      video=null;
-      const img=new Image();
-      img.onload=()=>uploadImage(img);
-      img.src=currentVisURL;
+      video=null; const img=new Image(); img.onload=()=>uploadImage(img); img.src=currentVisURL;
     } else if(f.type.startsWith('video/')){
-      video=document.createElement('video');
-      video.src=currentVisURL;
-      video.loop=true; video.muted=true; video.playsInline=true;
-      video.onloadeddata=()=>video.play();
-      HAS=true; lastVideoTime=0;
+      video=document.createElement('video'); video.src=currentVisURL; video.loop=true; video.muted=true; video.playsInline=true; video.onloadeddata=()=>video.play(); HAS=true; lastVideoTime=0;
     }
   });
 
@@ -190,191 +198,132 @@
   const wScratch=dial(document.getElementById('dialScratch'));
   const wDist   =dial(document.getElementById('dialDist'));
 
-  /* ========= Audio Graph (with working distortion) ========= */
+  /* ========= Audio Graph (turntable chain) ========= */
   const AudioCtx=window.AudioContext||window.webkitAudioContext;
   const actx=new AudioCtx();
   const gain=actx.createGain(); gain.gain.value=0.85;
-  const filter=actx.createBiquadFilter(); filter.type='bandpass'; filter.frequency.value=900; filter.Q.value=1.0;
-  const shaper=actx.createWaveShaper();
-  shaper.oversample='4x'; // stronger, smoother distortion
+  const biquad=actx.createBiquadFilter(); biquad.type='lowpass'; biquad.frequency.value=16000; // base LPF for link mode
+  const panner=actx.createStereoPanner();
+  const delayNode=actx.createDelay(1.0); delayNode.delayTime.value=0.15;
+  const distNode=actx.createWaveShaper(); distNode.oversample='4x';
+  function makeDistortionCurve(amount){ const n=44100, c=new Float32Array(n); const k=Math.max(0,amount|0); for(let i=0;i<n;i++){ const x=i*2/n-1; c[i]=(3+k)*x*20*Math.PI/(Math.PI+k*Math.abs(x)); } return c; }
+  distNode.curve = makeDistortionCurve(0);
 
-  // Make a reusable curve buffer (no per-frame alloc)
-  const curveN = 1024; const curve = new Float32Array(curveN);
-  function setDrive(d){ // d: 0..1
-    const amount = 1 + d*40; // stronger
-    for(let i=0;i<curveN;i++){
-      const x = i/(curveN-1)*2-1;
-      curve[i] = Math.tanh(x*amount);
-    }
-    shaper.curve = curve;
-    // also nudge filter/Q and output gain to “feel” distortion
-    filter.Q.value = 0.7 + d*2.5;
-    gain.gain.value = 0.9 + d*0.6;
-  }
-  setDrive(0.4);
+  // Chain: source -> biquad -> dist -> delay -> pan -> gain -> speakers + recorder
+  const recDest=actx.createMediaStreamDestination();
+  biquad.connect(distNode); distNode.connect(delayNode); delayNode.connect(panner); panner.connect(gain); gain.connect(actx.destination); gain.connect(recDest);
 
-  const merger=actx.createMediaStreamDestination(); // for recording
-  filter.connect(shaper); shaper.connect(gain); gain.connect(actx.destination); gain.connect(merger);
   const aStat=document.getElementById('aStat');
-
   const audio=new Audio(); audio.loop=true; let mediaSrc=null, currentAudURL=null;
-  function connectAudioEl(){
-    if(mediaSrc){ try{mediaSrc.disconnect();}catch{} }
-    mediaSrc=actx.createMediaElementSource(audio);
-    mediaSrc.connect(filter);
-  }
+  function connectAudioEl(){ if(mediaSrc){ try{mediaSrc.disconnect();}catch{} } mediaSrc=actx.createMediaElementSource(audio); mediaSrc.connect(biquad); }
 
-  document.getElementById('audFile').addEventListener('change', e=>{
+  // Load audio file
+  document.getElementById('audFile').addEventListener('change', async e=>{
     const f=e.target.files?.[0]; if(!f) return;
     if(currentAudURL){ URL.revokeObjectURL(currentAudURL); currentAudURL=null; }
     currentAudURL = URL.createObjectURL(f);
-    audio.src=currentAudURL; connectAudioEl(); actx.resume(); audio.play();
+    audio.src=currentAudURL; connectAudioEl(); await actx.resume(); audio.play();
     document.getElementById('play').textContent='⏸️ Pause'; aStat.textContent='Audio loaded'; aStat.className='ok';
   });
 
+  // Mic
   let micStream=null, usingMic=false;
   const micBtn=document.getElementById('mic');
   micBtn.onclick=async()=>{
-    if(usingMic){
-      if(micStream){ micStream.getTracks().forEach(t=>t.stop()); }
-      usingMic=false; micBtn.textContent='🎤 Mic Off';
-      aStat.textContent = audio.src?'Audio loaded':'No audio';
-      aStat.className = audio.src?'ok':'bad';
-      return;
-    }
-    try{
-      micStream = await navigator.mediaDevices.getUserMedia({audio:true});
-      const mic = actx.createMediaStreamSource(micStream);
-      mic.connect(filter);
-      usingMic=true; micBtn.textContent='🎤 Mic On';
-      aStat.textContent='Mic live'; aStat.className='ok';
-      actx.resume();
-    }catch(err){ alert('Mic error: '+err.message); }
+    if(usingMic){ if(micStream){micStream.getTracks().forEach(t=>t.stop());} usingMic=false; micBtn.textContent='🎤 Mic Off'; aStat.textContent=audio.src?'Audio loaded':'No audio'; aStat.className=audio.src?'ok':'bad'; return; }
+    try{ micStream=await navigator.mediaDevices.getUserMedia({audio:true}); const mic=actx.createMediaStreamSource(micStream); mic.connect(biquad); usingMic=true; micBtn.textContent='🎤 Mic On'; aStat.textContent='Mic live'; aStat.className='ok'; await actx.resume(); }catch(err){ alert('Mic error: '+err.message); }
   };
 
-  document.getElementById('play').onclick=e=>{
-    actx.resume();
-    if(audio.src){
-      if(audio.paused){ audio.play(); e.target.textContent='⏸️ Pause'; aStat.textContent='Playing'; aStat.className='ok'; }
-      else { audio.pause(); e.target.textContent='▶️ Play'; aStat.textContent='Paused'; aStat.className='ok'; }
-    } else {
-      aStat.textContent='Load audio or use Mic/Test Tone'; aStat.className='bad';
-    }
-  };
+  // Buttons/knobs
+  document.getElementById('play').onclick=e=>{ actx.resume(); if(audio.src){ if(audio.paused){audio.play(); e.target.textContent='⏸️ Pause'; aStat.textContent='Playing'; aStat.className='ok';} else {audio.pause(); e.target.textContent='▶️ Play'; aStat.textContent='Paused'; aStat.className='ok';} } else { aStat.textContent='Load audio or Mic/Test Tone'; aStat.className='bad'; } };
+  document.getElementById('tone').onclick=()=>{ actx.resume(); const osc=actx.createOscillator(), env=actx.createGain(); osc.type='sawtooth'; osc.frequency.value=220; env.gain.value=0; osc.connect(env); env.connect(biquad); const t=actx.currentTime; env.gain.setValueAtTime(0,t); env.gain.linearRampToValueAtTime(0.9,t+0.01); env.gain.exponentialRampToValueAtTime(0.0001,t+0.6); osc.start(t); osc.stop(t+0.65); aStat.textContent='Test tone played'; aStat.className='ok'; };
   document.getElementById('vol').oninput=e=>{ gain.gain.value=+e.target.value; };
-  document.getElementById('fType').onchange=e=>{ filter.type=e.target.value; };
-  document.getElementById('drive').oninput=e=>{ setDrive(+e.target.value); };
+  document.getElementById('fType').onchange=e=>{ biquad.type=e.target.value; };
+  document.getElementById('drive').oninput=e=>{ const d=Math.round(+e.target.value*80); distNode.curve=makeDistortionCurve(d); };
 
-  // Test tone
-  document.getElementById('tone').onclick=()=>{
-    actx.resume();
-    const osc=actx.createOscillator(), env=actx.createGain();
-    osc.type='sawtooth'; osc.frequency.value=220; env.gain.value=0;
-    osc.connect(env); env.connect(filter);
-    const t=actx.currentTime;
-    env.gain.setValueAtTime(0,t);
-    env.gain.linearRampToValueAtTime(0.9,t+0.01);
-    env.gain.exponentialRampToValueAtTime(0.0001,t+0.6);
-    osc.start(t); osc.stop(t+0.65);
-    aStat.textContent='Test tone played'; aStat.className='ok';
-  };
-
-  // Wheels (visual+audio)
+  // Wheels live params
   let spinWheel=0, zoomBase=1, twist=0, scratch=0;
   document.getElementById('dialSpeed').addEventListener('input',e=>{spinWheel=e.detail;});
   document.getElementById('dialZoom').addEventListener('input',e=>{zoomBase=e.detail;});
   document.getElementById('dialTwist').addEventListener('input',e=>{twist=e.detail;});
   document.getElementById('dialScratch').addEventListener('input',e=>{scratch=e.detail;});
-  document.getElementById('dialDist').addEventListener('input',e=>{ setDrive(e.detail); });
+  document.getElementById('dialDist').addEventListener('input',e=>{ const d=Math.round(e.detail*80); distNode.curve=makeDistortionCurve(d); });
 
   /* ========= Screenshot ========= */
-  document.getElementById('screenshot').onclick=()=>{
-    const url=canvas.toDataURL('image/png');
-    const a=document.createElement('a'); a.href=url; a.download=`kaleidoscope_${Date.now()}.png`; a.click();
-  };
+  document.getElementById('screenshot').onclick=()=>{ const url=canvas.toDataURL('image/png'); const a=document.createElement('a'); a.href=url; a.download=`kaleidoscope_${Date.now()}.png`; a.click(); };
 
-  /* ========= Recorder (robust + Safari notice) ========= */
-  const recBtn=document.getElementById('rec'), dl=document.getElementById('download'), recNote=document.getElementById('recNote');
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  let mr=null, chunks=[];
-  function chooseMime(){
-    const prefs=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
-    for(const mt of prefs){ if(window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(mt)) return mt; }
-    return null;
-  }
-  const mime = chooseMime();
-  if(!mime){
-    recBtn.disabled = true;
-    recBtn.title = 'Recording not supported here';
-    recNote.innerHTML = 'Recording not supported in this browser. Try desktop Chrome.';
-  } else if(isIOS){
-    // iOS Safari cannot mux processed mic audio with canvas reliably
-    recNote.innerHTML = 'On iOS Safari, recording may be video-only. For audio+video, use desktop Chrome.';
-  }
+  /* ========= AV Recorder (canvas + processed audio) ========= */
+  const recAV=document.getElementById('recAV'), dlAV=document.getElementById('downloadAV');
+  const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
+  function pickAVMime(){ const list=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm']; for(const m of list){ if(window.MediaRecorder?.isTypeSupported?.(m)) return m; } return null; }
+  const avMime=pickAVMime(); if(!avMime){ recAV.disabled=true; recAV.title='Recording not supported here'; }
+  else if(isIOS){ recAV.title='iOS Safari may capture video-only'; }
 
-  recBtn.onclick=()=>{
-    if(!mime){ alert('Recording not supported. Try desktop Chrome.'); return; }
-    if(mr && mr.state==='recording'){ mr.stop(); return; }
+  let mrAV=null, avChunks=[];
+  recAV.onclick=()=>{
+    if(!avMime){ alert('Recording not supported. Try desktop Chrome.'); return; }
+    if(mrAV && mrAV.state==='recording'){ mrAV.stop(); return; }
     try{
       const stream=canvas.captureStream(60);
-      const at=merger.stream.getAudioTracks();
-      if(at.length) stream.addTrack(at[0]); // add processed audio
-      mr=new MediaRecorder(stream,{mimeType:mime});
-      chunks=[];
-      mr.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); };
-      mr.onstop=()=>{
-        const blob=new Blob(chunks,{type:'video/webm'});
-        const url=URL.createObjectURL(blob);
-        dl.href=url; dl.style.display='inline'; dl.textContent='Download';
-        dl.download=`psy_kaleido_${Date.now()}.webm`;
-        recBtn.textContent='⏺ Start';
-      };
-      mr.start();
-      recBtn.textContent='⏹ Stop';
-      dl.style.display='none';
-    }catch(err){
-      alert('Recording failed here: '+err.message+'\nTip: desktop Chrome works best.');
-    }
+      const at=recDest.stream.getAudioTracks(); if(at.length) stream.addTrack(at[0]);
+      mrAV=new MediaRecorder(stream,{mimeType:avMime}); avChunks=[];
+      mrAV.ondataavailable=e=>{ if(e.data.size) avChunks.push(e.data); };
+      mrAV.onstop=()=>{ const blob=new Blob(avChunks,{type:'video/webm'}); const url=URL.createObjectURL(blob); dlAV.href=url; dlAV.style.display='inline'; dlAV.textContent='Download AV'; dlAV.download=`psy_kaleido_${Date.now()}.webm`; recAV.textContent='⏺ Start AV'; };
+      mrAV.start(); recAV.textContent='⏹ Stop'; dlAV.style.display='none';
+    }catch(err){ alert('AV recording failed: '+err.message); }
   };
 
-  /* ========= Touch gestures (linked to audio) ========= */
+  /* ========= Audio-only Recorder (processed chain) ========= */
+  const recAudio=document.getElementById('recAudio'), stopAudio=document.getElementById('stopAudio'), dlAudio=document.getElementById('dlAudio');
+  function pickAudioMime(){ const list=['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/aac']; for(const m of list){ if(window.MediaRecorder?.isTypeSupported?.(m)) return m; } return ''; }
+  let audioMime='', mrA=null, aChunks=[];
+  recAudio.onclick=async ()=>{
+    if(!window.MediaRecorder){ dlAudio.textContent='Recording not supported'; return; }
+    if(!audioMime) audioMime=pickAudioMime();
+    try{ mrA=new MediaRecorder(recDest.stream, audioMime?{mimeType:audioMime}:undefined); }catch{ try{ mrA=new MediaRecorder(recDest.stream); }catch{ dlAudio.textContent='Recorder init failed'; return; } }
+    aChunks=[]; mrA.ondataavailable=e=>{ if(e.data && e.data.size>0) aChunks.push(e.data); };
+    mrA.onstop=()=>{ const blob=new Blob(aChunks,{type:audioMime||'audio/webm'}); const url=URL.createObjectURL(blob); const ext=audioMime.includes('mp4')?'m4a':(audioMime.includes('aac')?'aac':'webm'); dlAudio.href=url; dlAudio.download=`kaleidoscope-audio.${ext}`; dlAudio.textContent='Download processed audio'; };
+    mrA.start(100); recAudio.disabled=true; stopAudio.disabled=false; dlAudio.textContent='Recording…';
+  };
+  stopAudio.onclick=()=>{ if(mrA && mrA.state==='recording') mrA.stop(); recAudio.disabled=false; stopAudio.disabled=true; };
+
+  /* ========= Gestures (swirl like your CodePen) ========= */
   const touchLinkSel=document.getElementById('touchAudio');
-  let pointers=new Map(), lastDist=0, lastTap=0;
+  let pointers=new Map(), lastDist=0, lastTap=0, lastX=innerWidth/2;
   let spinDrag=0, zoomDrag=0;
 
-  canvas.addEventListener('pointerdown',e=>{
+  function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
+  function mapRate(rot){ const r=Number(rot); return 0.5 + (r+2)*(1.5/4); } // like CodePen
+
+  canvas.addEventListener('pointerdown', async (e)=>{
     pointers.set(e.pointerId,e); canvas.setPointerCapture?.(e.pointerId);
     const t=performance.now(); if(t-lastTap<350){ panel.classList.toggle('hidden'); } lastTap=t;
+    if(actx.state==='suspended') await actx.resume();
+    if(video && video.play) try{ await video.play(); }catch{}
   });
-  canvas.addEventListener('pointermove',e=>{
+
+  canvas.addEventListener('pointermove', (e)=>{
     if(!pointers.has(e.pointerId)) return;
     const prev=pointers.get(e.pointerId); pointers.set(e.pointerId,e);
+    lastX=e.clientX;
     if(pointers.size===1){
       const dx=e.clientX-prev.clientX; spinDrag+=dx*0.002;
-      if(touchLinkSel.value==='1' && audio && audio.playbackRate!==undefined && !audio.paused){
-        audio.playbackRate=Math.max(0.25,Math.min(2.0,1+dx*0.002+scratch*0.2));
+      if(touchLinkSel.value==='1' && !audio.paused && audio.playbackRate!==undefined){
+        // scratch feel on 1-finger move
+        audio.playbackRate = clamp(1 + dx*0.2/100, 0.25, 3);
       }
     }else if(pointers.size===2){
-      const [a,b]=[...pointers.values()];
-      const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+      const [a,b]=[...pointers.values()]; const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
       if(!lastDist) lastDist=d; const dd=d-lastDist; lastDist=d; zoomDrag+=dd*0.003;
-      if(touchLinkSel.value==='1'){
-        const f=Math.max(80,Math.min(12000, 900*(zoomBase+zoomDrag)));
-        filter.frequency.setTargetAtTime(f, actx.currentTime, 0.02);
-      }
     }
   });
-  function endPtr(e){ pointers.delete(e.pointerId); if(pointers.size<2) lastDist=0; }
-  canvas.addEventListener('pointerup',endPtr);
-  canvas.addEventListener('pointercancel',endPtr);
-  canvas.addEventListener('pointerleave',endPtr);
+  function endPtr(e){ pointers.delete(e.pointerId); if(pointers.size<2) lastDist=0; if(audio && !audio.paused) audio.playbackRate = mapRate(parseFloat(spinWheel)); }
+  canvas.addEventListener('pointerup',endPtr); canvas.addEventListener('pointercancel',endPtr); canvas.addEventListener('pointerleave',endPtr);
 
   /* ========= Donate ========= */
-  document.getElementById('donate').addEventListener('click',()=>{
-    window.open('https://cash.app/$lightwell333','_blank','noopener');
-  });
+  document.getElementById('donate').addEventListener('click',()=>{ window.open('https://cash.app/$lightwell333','_blank','noopener'); });
 
-  /* ========= FPS + Render loop ========= */
+  /* ========= FPS + Render loop + link modes ========= */
   const fpsEl=document.getElementById('fps'); let lastF=performance.now(), frames=0;
   let t0=performance.now(); let rot=0;
   function loop(){
@@ -382,7 +331,7 @@
     const now=performance.now(); const dt=(now-t0)/1000; t0=now;
     frames++; if(now-lastF>500){ fpsEl.textContent=(frames*1000/(now-lastF)).toFixed(0); lastF=now; frames=0; }
 
-    // Update video texture only when the frame actually advances (throttle = less VRAM churn)
+    // throttle video texture upload
     if(video && video.readyState>=2){
       if(video.currentTime !== lastVideoTime){
         gl.bindTexture(gl.TEXTURE_2D,TEX);
@@ -392,20 +341,30 @@
       }
     }
 
-    // ease audio playbackRate back to 1
-    if(pointers.size===0 && audio && !audio.paused && Math.abs(audio.playbackRate-1)>0.001){
-      audio.playbackRate += (1 - audio.playbackRate) * 0.06;
-    }
-
-    // spin from wheels + drag, zoom from wheel+pinch
+    // spin/zoom state
     rot += (spinWheel + spinDrag) * dt; spinDrag *= 0.96;
     const zoom = Math.max(0.2, Math.min(4, zoomBase + zoomDrag)); zoomDrag *= 0.9;
 
+    // AUDIO LINK MODES (from your CodePen idea)
+    if(mediaSrc || usingMic){ // only if audio chain exists
+      const mode = linkModeEl.value;
+      if(mode==='speed' && audio && !audio.paused){ audio.playbackRate = mapRate(spinWheel); }
+      else if(mode==='filter'){ const cut=500 + (zoom-0.2)/(4-0.2)*(16000-500); biquad.frequency.setTargetAtTime(cut, actx.currentTime, 0.05); }
+      else if(mode==='pan'){ const pan=((lastX/innerWidth)*2)-1; panner.pan.setTargetAtTime(clamp(pan,-1,1), actx.currentTime, 0.05); }
+      else if(mode==='gain'){ const g=0.3 + (zoom-0.2)/(4-0.2)*1.7; gain.gain.setTargetAtTime(g, actx.currentTime, 0.05); }
+      else if(mode==='echo'){ const d=clamp(Math.abs(spinWheel)*0.35,0.01,0.6); delayNode.delayTime.setTargetAtTime(d, actx.currentTime, 0.05); }
+      else if(mode==='dist'){ const amt=Math.round(((zoom-0.2)/(4-0.2))*80); distNode.curve=makeDistortionCurve(amt); }
+    }
+
+    // gentle return to 1x when not scratching
+    if(pointers.size===0 && audio && !audio.paused && Math.abs(audio.playbackRate-1)>0.001){ audio.playbackRate += (1 - audio.playbackRate) * 0.06; }
+
+    // draw kaleidoscope
     gl.useProgram(P);
     gl.uniform2f(uR,canvas.width,canvas.height);
     gl.uniform1f(uT,now/1000);
     gl.uniform1i(uK,Math.max(2,parseInt(wedges.value,10)));
-    gl.uniform1f(uROT,rot + scratch*0.2 + 0.0*twist); // twist affects mapping below
+    gl.uniform1f(uROT,rot + scratch*0.2);
     gl.uniform1f(uZOOM,zoom);
     gl.uniform1f(uTW,twist);
     gl.uniform1i(uMIR, mirror.value==='1'?1:0);
