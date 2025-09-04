@@ -1,326 +1,375 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Kaleidoscope — Separate Audio Wheel</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<title>Kaleidoscope — Tiny Controls, Touch Tweaks (No Audio)</title>
 <style>
-  :root{--glass:rgba(12,14,18,.78);--line:#262c38;--fg:#eaf0ff;--muted:#a6b0c9}
-  html,body{margin:0;height:100%;background:#000;overflow:hidden}
-  canvas{display:block;width:100vw;height:100vh;touch-action:none;cursor:grab}
-
-  /* Dock */
-  #dock{position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:50;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  #dock button{background:#0b0e14;border:1px solid var(--line);color:#fff;border-radius:12px;padding:8px 12px;cursor:pointer}
-  #fpsBox{background:#0b0e14;border:1px solid var(--line);border-radius:999px;padding:6px 10px;color:#9aa4c4}
-  #donate{color:#00ff88;font-weight:700;box-shadow:0 0 12px rgba(0,255,136,.45)}
-  #donate:hover{box-shadow:0 0 18px rgba(0,255,136,.8);transform:translateY(-1px)}
-
-  /* Panel (starts hidden; light) */
-  #panel{position:fixed;left:50%;top:56px;transform:translateX(-50%);z-index:40;max-width:min(96vw,980px);
-         background:var(--glass);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:16px;padding:12px 14px}
-  #panel.hidden{display:none}
-  .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
-  .card{border:1px solid var(--line);border-radius:14px;padding:10px}
-  .card h3{margin:0 0 6px 0;color:var(--muted);font:600 14px system-ui}
-  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  label{font:12px system-ui;color:var(--muted)}
-  input[type="range"]{width:170px}
-  input[type="file"],select,button{background:#0b0e14;border:1px solid var(--line);color:#fff;border-radius:10px;padding:6px 10px}
-
-  /* AUDIO WHEEL */
-  #audioWheel{
-    position:fixed; right:14px; top:50%; transform:translateY(-50%);
-    width:160px; height:160px; border-radius:50%; z-index:60;
-    background:radial-gradient(120% 120% at 30% 30%, #1a2236, #090c12);
-    border:1px solid #243049; box-shadow:0 8px 30px rgba(0,0,0,.45), inset 0 0 0 1px #162033;
-    touch-action:none; user-select:none;
+  :root{
+    --glass: rgba(10,10,14,.7);
+    --line: #2a2f3a; --fg:#fff; --muted:#b8bfd4; --accent:#69f;
   }
-  #audioWheel .tick{position:absolute; left:50%; top:8px; width:2px; height:18px; background:#8aa2ff; transform-origin:50% 72px; border-radius:2px;}
-  #audioWheel .cap{position:absolute; inset:16px; border-radius:50%; background:radial-gradient(120% 120% at 35% 35%, #0e1422, #070a10); box-shadow:inset 0 0 0 1px #1b2740;}
-  #audioWheel b{position:absolute; bottom:-20px; left:0; right:0; text-align:center; color:#a8b3d6; font:600 12px system-ui}
-  #rateRead{position:absolute; top:-22px; left:50%; transform:translateX(-50%); color:#a8f3ff; font:600 12px system-ui}
-
-  /* Tips */
-  #tips{position:fixed;left:10px;bottom:10px;z-index:30;color:#9aa4c4;font:12px system-ui;background:rgba(0,0,0,.45);
-        padding:7px 10px;border-radius:10px;border:1px solid var(--line)}
-  .ok{color:#9cff9c} .bad{color:#ff9c9c}
-  @media (max-width:480px){ #audioWheel{width:136px;height:136px;} #audioWheel .tick{transform-origin:50% 60px;} }
+  html,body{margin:0;height:100%;background:#000;color:var(--fg);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto}
+  canvas{display:block;width:100vw;height:100vh;touch-action:none;cursor:grab}
+  #dock{
+    position:fixed; left:50%; top:10px; transform:translateX(-50%);
+    display:flex; gap:10px; align-items:center; z-index:30;
+    background:var(--glass); border:1px solid var(--line);
+    padding:8px 10px; border-radius:12px; backdrop-filter:blur(10px);
+    box-shadow:0 8px 30px rgba(0,0,0,.35);
+  }
+  #dock input[type="range"]{ width:90px }
+  #dock label{ font-size:12px; display:flex; align-items:center; gap:6px; color:var(--muted) }
+  #dock .sep{ width:1px; height:22px; background:var(--line); margin:0 2px }
+  #dock .btn{
+    font-size:12px; padding:6px 10px; border-radius:10px; border:1px solid var(--line);
+    background:#11151f; color:#cfe0ff; cursor:pointer;
+  }
+  #dock .btn:active{ transform:translateY(1px) }
+  #dock input[type="file"]{ display:none }
+  #toggle{
+    position:fixed; right:10px; top:10px; z-index:31;
+    background:var(--glass); border:1px solid var(--line); color:var(--fg);
+    padding:6px 10px; border-radius:10px; cursor:pointer; font-size:12px; backdrop-filter:blur(10px);
+  }
+  #hint{
+    position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
+    color:#9fb3ff; background:rgba(20,20,35,.45); padding:6px 10px; border-radius:10px;
+    font-size:12px; border:1px solid rgba(90,110,170,.35); z-index:25;
+  }
 </style>
 </head>
 <body>
-<canvas id="gl"></canvas>
+<canvas id="c"></canvas>
 
-<!-- Dock -->
+<button id="toggle" title="Show/Hide controls">Hide UI</button>
 <div id="dock">
-  <button id="toggle" title="Show/Hide Controls (H)">🎛️ Controls</button>
-  <button id="screenshot" title="Save PNG">📷 Screenshot</button>
-  <button id="rec" title="Record video + audio">⏺ Start</button>
-  <a id="download" download style="display:none">Download</a>
-  <button id="donate" title="Support">💚 Donate</button>
-  <div id="fpsBox">FPS <span id="fps">—</span></div>
+  <label>Speed
+    <input id="speed" type="range" min="-2" max="2" step="0.001" value="0.25">
+  </label>
+  <label>Twist
+    <input id="twist" type="range" min="-4" max="4" step="0.001" value="0.75">
+  </label>
+  <label>Wedges
+    <input id="wedges" type="range" min="3" max="32" step="1" value="12">
+  </label>
+  <label>Zoom
+    <input id="zoom" type="range" min="0.25" max="4" step="0.001" value="1.0">
+  </label>
+  <div class="sep"></div>
+  <label class="btn" for="file">Load Image</label>
+  <input id="file" type="file" accept="image/*">
+  <button id="reset" class="btn">Reset</button>
 </div>
-
-<!-- Audio Wheel (independent from image) -->
-<div id="audioWheel" title="Spin to scratch / pitch">
-  <div id="rateRead">1.00×</div>
-  <div class="cap"></div>
-  <div class="tick" id="awTick"></div>
-  <b>Audio Wheel</b>
-</div>
-
-<!-- Panel (hidden by default) -->
-<div id="panel" class="hidden">
-  <div class="grid">
-    <div class="card">
-      <h3>Visual</h3>
-      <div class="row"><label>Upload Visual</label><input id="visFile" type="file" accept="image/*,video/*"></div>
-      <div class="row"><label>Wedges</label><input id="wedges" type="range" min="3" max="48" step="1" value="12"><span id="wedgesV">12</span></div>
-      <div class="row"><label>Mirror</label>
-        <select id="mirror"><option value="1" selected>On</option><option value="0">Off</option></select>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3>Audio</h3>
-      <div class="row"><label>Upload Audio</label><input id="audFile" type="file" accept="audio/*"></div>
-      <div class="row">
-        <button id="play">▶️ Play</button>
-        <button id="mic">🎤 Mic Off</button>
-        <button id="tone">🔔 Test Tone</button>
-        <label>Vol</label><input id="vol" type="range" min="0" max="1" step="0.01" value="0.9">
-      </div>
-      <div class="row"><label>Filter</label>
-        <select id="fType"><option selected>bandpass</option><option>lowpass</option><option>highpass</option></select>
-        <label>Drive</label><input id="drive" type="range" min="0" max="1" step="0.01" value="0.3">
-      </div>
-      <div class="row"><span id="aStat" class="bad">No audio</span></div>
-    </div>
-
-    <div class="card">
-      <h3>Recording</h3>
-      <div class="row">Records canvas + processed audio (best on desktop Chrome). iOS Safari may do video-only.</div>
-    </div>
-  </div>
-</div>
-
-<div id="tips">Canvas controls image (drag=spin, pinch=zoom). Spin the <b>Audio Wheel</b> to scratch/pitch the song — totally separate from the visuals. Double-tap canvas or press <b>H</b> to show/hide panel.</div>
+<div id="hint">Tip: drag to rotate, drag vertically to adjust twist • pinch or mouse-wheel to zoom</div>
 
 <script>
 (() => {
-  /* ========= WebGL Kaleidoscope (visual only) ========= */
-  const canvas = document.getElementById('gl');
-  const gl = canvas.getContext('webgl',{preserveDrawingBuffer:true,antialias:true});
+  const gl = c.getContext('webgl', { antialias: true, alpha: false, preserveDrawingBuffer: true });
   if(!gl){ alert('WebGL not available'); return; }
-  function fit(){ const dpr=Math.min(1.5,devicePixelRatio||1); canvas.width=Math.floor(innerWidth*dpr); canvas.height=Math.floor(innerHeight*dpr); gl.viewport(0,0,canvas.width,canvas.height); }
-  addEventListener('resize',fit,{passive:true}); fit();
 
-  const vsrc=`attribute vec2 a; varying vec2 v; void main(){ v=a*0.5+0.5; gl_Position=vec4(a,0.0,1.0);} `;
-  const fsrc=`precision highp float; varying vec2 v; uniform vec2 R; uniform float T; uniform sampler2D tex; uniform int HAS; uniform int K; uniform float ROT; uniform float ZOOM; uniform float TW; uniform int MIR;
-    vec2 kale(vec2 p){ float asp=R.x/R.y; p.x*=asp; float ang=atan(p.y,p.x); float rad=length(p); float w=6.28318530718/float(K);
-      ang=mod(ang,w); if(MIR==1){ ang=abs(ang-0.5*w)-0.5*w; } ang += ROT + rad*TW;
-      vec2 q=vec2(cos(ang),sin(ang))*rad; q.x/=asp; q*=ZOOM; return q*0.5+0.5; }
-    vec3 rainbow(vec2 uv){ return 0.5+0.5*cos(vec3(0.0,2.094,4.188)+T*0.2+vec3(uv,0.0)*6.0); }
-    void main(){ vec2 uv=kale(v*2.0-1.0); vec3 c = HAS==1 ? texture2D(tex,uv).rgb : rainbow(uv); gl_FragColor=vec4(c,1.0);} `;
-  function sh(t,s){ const o=gl.createShader(t); gl.shaderSource(o,s); gl.compileShader(o); if(!gl.getShaderParameter(o,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; }
-  const P=gl.createProgram(); gl.attachShader(P,sh(gl.VERTEX_SHADER,vsrc)); gl.attachShader(P,sh(gl.FRAGMENT_SHADER,fsrc)); gl.linkProgram(P); if(!gl.getProgramParameter(P,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(P)); gl.useProgram(P);
-  const B=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,B); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
-  const A=gl.getAttribLocation(P,'a'); gl.enableVertexAttribArray(A); gl.vertexAttribPointer(A,2,gl.FLOAT,false,0,0);
-  const U=n=>gl.getUniformLocation(P,n); const uR=U('R'),uT=U('T'),uTex=U('tex'),uHAS=U('HAS'),uK=U('K'),uROT=U('ROT'),uZOOM=U('ZOOM'),uTW=U('TW'),uMIR=U('MIR'); gl.uniform1i(uTex,0);
-
-  // Texture & uploads
-  const TEX=gl.createTexture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,TEX);
-  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
-  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([24,24,24,255]));
-  let HAS=false, video=null, lastVideoTime=0, visURL=null;
-
-  function uploadImage(img){ gl.bindTexture(gl.TEXTURE_2D,TEX); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img); HAS=true; }
-
-  /* ========= Panel + visual inputs ========= */
-  const panel=document.getElementById('panel'), toggle=document.getElementById('toggle');
-  const wedges=document.getElementById('wedges'), wedgesV=document.getElementById('wedgesV');
-  const mirror=document.getElementById('mirror');
-  toggle.onclick=()=>panel.classList.toggle('hidden'); addEventListener('keydown',e=>{ if(e.key.toLowerCase()==='h') panel.classList.toggle('hidden'); });
-  wedges.oninput=()=>wedgesV.textContent=wedges.value;
-
-  // Visual upload
-  document.getElementById('visFile').addEventListener('change', e=>{
-    const f=e.target.files?.[0]; if(!f) return;
-    if(visURL){ URL.revokeObjectURL(visURL); visURL=null; }
-    visURL = URL.createObjectURL(f);
-    if(f.type.startsWith('image/')){ video=null; const img=new Image(); img.onload=()=>uploadImage(img); img.src=visURL; }
-    else if(f.type.startsWith('video/')){ video=document.createElement('video'); video.src=visURL; video.loop=true; video.muted=true; video.playsInline=true; video.onloadeddata=()=>video.play(); HAS=true; lastVideoTime=0; }
-  });
-
-  /* ========= AUDIO (separate control via wheel) ========= */
-  const AudioCtx=window.AudioContext||window.webkitAudioContext;
-  const actx=new AudioCtx();
-
-  const gain=actx.createGain(); gain.gain.value=0.9;
-  const filter=actx.createBiquadFilter(); filter.type='bandpass'; filter.frequency.value=900; filter.Q.value=1.0;
-  const shaper=actx.createWaveShaper(); shaper.oversample='4x';
-  function makeCurve(amount){ const n=1024,c=new Float32Array(n); const a=1+amount*40; for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=Math.tanh(x*a);} return c; }
-  shaper.curve=makeCurve(0.3);
-  const recMix=actx.createMediaStreamDestination();
-  filter.connect(shaper); shaper.connect(gain); gain.connect(actx.destination); gain.connect(recMix);
-
-  // Keep-alive + unlock (prevents auto-stop)
-  const keepGain=actx.createGain(); keepGain.gain.value=0.001; const keep=actx.createConstantSource(); keep.offset.value=0;
-  keep.connect(keepGain).connect(actx.destination);
-  let unlocked=false;
-  const unlock=async()=>{ try{await actx.resume();}catch{} try{keep.start();}catch{} unlocked=true; window.removeEventListener('pointerdown',unlock); window.removeEventListener('touchstart',unlock); window.removeEventListener('keydown',unlock); };
-  window.addEventListener('pointerdown',unlock,{once:true,passive:true}); window.addEventListener('touchstart',unlock,{once:true,passive:true}); window.addEventListener('keydown',unlock,{once:true});
-
-  const audio=new Audio(); audio.loop=true; audio.preload='auto'; audio.playsInline=true;
-  let mediaSrc=null,audURL=null;
-  function connectAudioEl(){ if(mediaSrc){ try{mediaSrc.disconnect();}catch{} } mediaSrc=actx.createMediaElementSource(audio); mediaSrc.connect(filter); }
-
-  const aStat=document.getElementById('aStat');
-  document.getElementById('audFile').addEventListener('change', async e=>{
-    const f=e.target.files?.[0]; if(!f) return;
-    if(audURL){ URL.revokeObjectURL(audURL); audURL=null; }
-    audURL = URL.createObjectURL(f);
-    audio.src=audURL; connectAudioEl(); try{ await actx.resume(); await audio.play(); }catch{}
-    document.getElementById('play').textContent='⏸️ Pause'; aStat.textContent='Playing'; aStat.className='ok';
-  });
-
-  // Play / Mic / Tone
-  document.getElementById('play').onclick=async(e)=>{ try{await actx.resume();}catch{} if(!audio.src){ aStat.textContent='Load audio or use Mic/Test Tone'; aStat.className='bad'; return;} try{ if(audio.paused){await audio.play(); e.target.textContent='⏸️ Pause'; aStat.textContent='Playing'; aStat.className='ok';} else {audio.pause(); e.target.textContent='▶️ Play'; aStat.textContent='Paused'; aStat.className='ok';} }catch{} };
-  let micStream=null, usingMic=false;
-  document.getElementById('mic').onclick=async(e)=>{ if(usingMic){ if(micStream){micStream.getTracks().forEach(t=>t.stop());} usingMic=false; e.target.textContent='🎤 Mic Off'; aStat.textContent=audio.src?'Audio loaded':'No audio'; aStat.className=audio.src?'ok':'bad'; return;}
-    try{ await actx.resume(); micStream=await navigator.mediaDevices.getUserMedia({audio:true}); const mic=actx.createMediaStreamSource(micStream); mic.connect(filter); usingMic=true; e.target.textContent='🎤 Mic On'; aStat.textContent='Mic live'; aStat.className='ok'; }catch(err){ alert('Mic error: '+err.message); } };
-  document.getElementById('tone').onclick=()=>{ (async()=>{try{await actx.resume();}catch{}})(); const osc=actx.createOscillator(), env=actx.createGain(); osc.type='sawtooth'; osc.frequency.value=220; env.gain.value=0; osc.connect(env); env.connect(filter); const t=actx.currentTime; env.gain.setValueAtTime(0,t); env.gain.linearRampToValueAtTime(0.9,t+0.01); env.gain.exponentialRampToValueAtTime(0.0001,t+0.6); osc.start(t); osc.stop(t+0.65); aStat.textContent='Test tone played'; aStat.className='ok'; };
-  document.getElementById('vol').oninput=e=>{ gain.gain.value=+e.target.value; };
-  document.getElementById('fType').onchange=e=>{ filter.type=e.target.value; };
-  document.getElementById('drive').oninput=e=>{ shaper.curve=makeCurve(+e.target.value); };
-
-  /* ========= AUDIO WHEEL logic (independent scratch) ========= */
-  const wheel = document.getElementById('audioWheel');
-  const tick  = document.getElementById('awTick');
-  const rateRead = document.getElementById('rateRead');
-
-  let awDragging=false, awLastA=0, awSpinVel=0;  // spin velocity from finger
-  function angleAt(e){
-    const r=wheel.getBoundingClientRect();
-    const cx=r.left+r.width/2, cy=r.top+r.height/2;
-    const x=(e.touches?e.touches[0].clientX:e.clientX)-cx;
-    const y=(e.touches?e.touches[0].clientY:e.clientY)-cy;
-    return Math.atan2(y,x); // radians
+  // DPR-aware canvas sizing
+  const DPR = Math.min(2, window.devicePixelRatio || 1);
+  function resize(){
+    const w = Math.floor(innerWidth * DPR), h = Math.floor(innerHeight * DPR);
+    if(c.width !== w || c.height !== h){
+      c.width = w; c.height = h;
+      c.style.width = innerWidth + 'px'; c.style.height = innerHeight + 'px';
+      gl.viewport(0,0,w,h);
+    }
   }
-  function setTickByRate(rate){
-    // Map 0.25x..3x to -140..+140 deg for display
-    const t=(rate-0.25)/(3-0.25);
-    const deg=-140 + t*280;
-    tick.style.transform=`translateX(-50%) rotate(${deg}deg)`;
-    rateRead.textContent = (Math.round(rate*100)/100).toFixed(2)+'×';
+  addEventListener('resize', resize, {passive:true}); resize();
+
+  const vsrc = `
+  attribute vec2 a_pos;
+  varying vec2 v_uv;
+  void main(){
+    v_uv = a_pos * 0.5 + 0.5;
+    gl_Position = vec4(a_pos, 0.0, 1.0);
+  }`;
+
+  const fsrc = `
+  precision highp float;
+  varying vec2 v_uv;
+  uniform vec2  u_res;
+  uniform float u_time;
+  uniform sampler2D u_tex;
+  uniform bool  u_hasTex;
+
+  uniform float u_k;      // wedge count
+  uniform float u_speed;  // rotation speed
+  uniform float u_twist;  // angle added per radius
+  uniform float u_zoom;   // scale
+  uniform float u_rot;    // base rotation
+
+  // simple 2D rot
+  mat2 rot2(float a){ float c=cos(a), s=sin(a); return mat2(c,-s,s,c); }
+
+  // fallback texture (psychedelic swirl) when no image loaded
+  vec3 fallbackTex(vec2 p){
+    float r = length(p);
+    float a = atan(p.y,p.x);
+    float w = sin(8.0*a + 10.0*r - 0.7*u_time)*0.5+0.5;
+    vec3 c1 = vec3(0.2,0.5,1.0);
+    vec3 c2 = vec3(1.0,0.2,0.8);
+    return mix(c1, c2, w);
   }
 
-  wheel.addEventListener('pointerdown',e=>{
-    awDragging=true; wheel.setPointerCapture?.(e.pointerId);
-    awLastA=angleAt(e);
+  void main(){
+    // NDC centered coords
+    vec2 uv = (gl_FragCoord.xy / u_res) * 2.0 - 1.0;
+    uv.x *= u_res.x / u_res.y; // aspect
+    vec2 p = uv;
+
+    // polar
+    float ang = atan(p.y, p.x) + u_rot + u_time * u_speed;
+    float r   = length(p);
+
+    // kaleidoscope: mirror within sector
+    float sector = 6.28318530718 / max(u_k, 1.0);
+    float t = ang / sector;
+    float frac = fract(t);
+    // mirror around center of sector; smooth seams by tiny bias
+    float signed = (abs(frac - 0.5) * 2.0 - 1.0);
+    float a = signed * (sector * 0.5);
+
+    // add twist based on radius
+    a += u_twist * r;
+
+    // back to cartesian
+    vec2 dir = vec2(cos(a), sin(a));
+    vec2 q = dir * r;
+
+    // zoom and slight rotation coupling for fun
+    q *= 1.0 / max(u_zoom, 0.001);
+
+    // sample texture (centered at 0.5)
+    vec2 tuv = q;
+    // tile softly to avoid hard edges
+    vec2 tile = fract(tuv * 0.5 + 0.5);
+    vec2 edge = smoothstep(0.0, 0.01, tile) * smoothstep(0.0, 0.01, 1.0 - tile);
+    float vign = edge.x * edge.y;
+
+    vec3 col;
+    if(u_hasTex){
+      col = texture2D(u_tex, tile).rgb;
+    }else{
+      col = fallbackTex(q);
+    }
+
+    // subtle glow and vignetting to reduce seam visibility
+    float g = smoothstep(0.0, 1.0, 1.0 - r);
+    col *= mix(0.85, 1.2, g);
+    col *= mix(0.9, 1.0, vign);
+
+    gl_FragColor = vec4(col, 1.0);
+  }`;
+
+  // shader util
+  function compile(type, src){
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+      console.error(gl.getShaderInfoLog(s));
+      throw new Error('Shader compile error');
+    }
+    return s;
+  }
+  const vs = compile(gl.VERTEX_SHADER, vsrc);
+  const fs = compile(gl.FRAGMENT_SHADER, fsrc);
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs); gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)){
+    console.error(gl.getProgramInfoLog(prog));
+    throw new Error('Link error');
+  }
+  gl.useProgram(prog);
+
+  // fullscreen triangle
+  const vbo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+    -1,-1,  3,-1,  -1,3
+  ]), gl.STATIC_DRAW);
+  const a_pos = gl.getAttribLocation(prog, 'a_pos');
+  gl.enableVertexAttribArray(a_pos);
+  gl.vertexAttribPointer(a_pos, 2, gl.FLOAT, false, 0, 0);
+
+  // uniforms
+  const u_res   = gl.getUniformLocation(prog, 'u_res');
+  const u_time  = gl.getUniformLocation(prog, 'u_time');
+  const u_tex   = gl.getUniformLocation(prog, 'u_tex');
+  const u_hasTex= gl.getUniformLocation(prog, 'u_hasTex');
+  const u_k     = gl.getUniformLocation(prog, 'u_k');
+  const u_speed = gl.getUniformLocation(prog, 'u_speed');
+  const u_twist = gl.getUniformLocation(prog, 'u_twist');
+  const u_zoom  = gl.getUniformLocation(prog, 'u_zoom');
+  const u_rot   = gl.getUniformLocation(prog, 'u_rot');
+
+  // state
+  let params = {
+    k: 12,
+    speed: 0.25,
+    twist: 0.75,
+    zoom: 1.0,
+    rot: 0.0
+  };
+
+  // UI bindings
+  const $ = sel => document.querySelector(sel);
+  const elSpeed  = $('#speed');
+  const elTwist  = $('#twist');
+  const elWedges = $('#wedges');
+  const elZoom   = $('#zoom');
+  const elFile   = $('#file');
+  const elReset  = $('#reset');
+  const elToggle = $('#toggle');
+  const elDock   = $('#dock');
+
+  elSpeed.addEventListener('input', e => params.speed = +e.target.value);
+  elTwist.addEventListener('input', e => params.twist = +e.target.value);
+  elWedges.addEventListener('input', e => params.k     = +e.target.value);
+  elZoom.addEventListener('input',  e => params.zoom  = +e.target.value);
+  elReset.addEventListener('click', () => {
+    params = { k:12, speed:0.25, twist:0.75, zoom:1.0, rot:0.0 };
+    elSpeed.value = params.speed;
+    elTwist.value = params.twist;
+    elWedges.value= params.k;
+    elZoom.value  = params.zoom;
+  });
+  let dockVisible = true;
+  elToggle.addEventListener('click', () => {
+    dockVisible = !dockVisible;
+    elDock.style.display = dockVisible ? 'flex' : 'none';
+    elToggle.textContent = dockVisible ? 'Hide UI' : 'Show UI';
+  });
+
+  // Texture handling
+  let tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  // temporary 1x1 pixel
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([30,30,40,255]));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+
+  let hasTex = false;
+  function loadImage(src){
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      hasTex = true;
+    };
+    img.src = src;
+  }
+  elFile.addEventListener('change', e=>{
+    const f = e.target.files && e.target.files[0];
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = ev => loadImage(ev.target.result);
+    reader.readAsDataURL(f);
+  });
+
+  // drag & drop support
+  document.addEventListener('dragover', e=>{ e.preventDefault(); }, false);
+  document.addEventListener('drop', e=>{
+    e.preventDefault();
+    if(e.dataTransfer.files && e.dataTransfer.files[0]){
+      const f = e.dataTransfer.files[0];
+      if(!/^image\//.test(f.type)) return;
+      const reader = new FileReader();
+      reader.onload = ev => loadImage(ev.target.result);
+      reader.readAsDataURL(f);
+    }
+  }, false);
+
+  // Pointer controls — horizontal drag = rotate, vertical drag = twist; pinch/wheel = zoom
+  let dragging = false;
+  let lastX = 0, lastY = 0;
+  function onDown(e){
+    dragging = true;
+    c.style.cursor = 'grabbing';
+    const p = e.touches ? e.touches[0] : e;
+    lastX = p.clientX; lastY = p.clientY;
+  }
+  function onMove(e){
+    if(!dragging) return;
+    const p = e.touches ? e.touches[0] : e;
+    const dx = (p.clientX - lastX) / innerWidth;
+    const dy = (p.clientY - lastY) / innerHeight;
+    lastX = p.clientX; lastY = p.clientY;
+    params.rot   += dx * Math.PI * 2.0;     // rotate
+    params.twist += dy * 4.0;               // twist adjust
+    elTwist.value = params.twist;
+  }
+  function onUp(){ dragging = false; c.style.cursor='grab'; }
+  c.addEventListener('mousedown', onDown);
+  addEventListener('mousemove', onMove);
+  addEventListener('mouseup', onUp);
+  c.addEventListener('touchstart', e=>{ onDown(e); e.preventDefault(); }, {passive:false});
+  c.addEventListener('touchmove',  e=>{ onMove(e); e.preventDefault(); }, {passive:false});
+  c.addEventListener('touchend',   e=>{ onUp(e); e.preventDefault(); }, {passive:false});
+
+  // Pinch zoom
+  let lastDist = 0;
+  c.addEventListener('touchmove', e=>{
+    if(e.touches && e.touches.length===2){
+      const [a,b] = [e.touches[0], e.touches[1]];
+      const d = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+      if(lastDist){
+        const dd = (d - lastDist) / 200.0;
+        params.zoom = Math.min(4, Math.max(0.25, params.zoom * (1 - dd)));
+        elZoom.value = params.zoom;
+      }
+      lastDist = d;
+    } else {
+      lastDist = 0;
+    }
+  }, {passive:false});
+
+  // Wheel zoom
+  c.addEventListener('wheel', e=>{
+    const delta = Math.sign(e.deltaY) * 0.05;
+    params.zoom = Math.min(4, Math.max(0.25, params.zoom * (1 + delta)));
+    elZoom.value = params.zoom;
     e.preventDefault();
   }, {passive:false});
-  addEventListener('pointermove',e=>{
-    if(!awDragging) return;
-    const a=angleAt(e);
-    let d=a-awLastA;
-    if(d> Math.PI) d-=2*Math.PI;
-    if(d<-Math.PI) d+=2*Math.PI;
-    awSpinVel += d * 2.0;                 // add to wheel velocity
-    awLastA=a;
-  }, {passive:true});
-  addEventListener('pointerup',()=>{awDragging=false;});
-  addEventListener('pointercancel',()=>{awDragging=false;});
 
-  // Audio target rate derived from wheel velocity (with damping)
-  let targetRate = 1.0;
-  function updateAudioFromWheel(dt){
-    // decay velocity so it coasts
-    awSpinVel *= Math.pow(0.94, dt*60);
-    // map velocity to rate (clamped)
-    targetRate = Math.max(0.25, Math.min(3.0, 1 + awSpinVel*0.6));
-    if(audio && !audio.paused && audio.playbackRate!==undefined){
-      audio.playbackRate += (targetRate - audio.playbackRate)*0.18;
-    }
-    setTickByRate(targetRate);
-    // subtle sound tone follow: change filter with rate
-    const cut = 500 + (targetRate-0.25)/(3-0.25)*(12000-500);
-    filter.frequency.setTargetAtTime(cut, actx.currentTime, 0.05);
+  // Animate
+  const t0 = performance.now();
+  function frame(){
+    resize();
+    const t = (performance.now() - t0) / 1000;
+
+    gl.useProgram(prog);
+    gl.uniform2f(u_res, c.width, c.height);
+    gl.uniform1f(u_time, t);
+    gl.uniform1i(u_tex, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1i(u_hasTex, hasTex ? 1 : 0);
+
+    gl.uniform1f(u_k, params.k);
+    gl.uniform1f(u_speed, params.speed);
+    gl.uniform1f(u_twist, params.twist);
+    gl.uniform1f(u_zoom, params.zoom);
+    gl.uniform1f(u_rot, params.rot);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    requestAnimationFrame(frame);
   }
-  setTickByRate(1.0);
+  frame();
 
-  /* ========= Recorder, Screenshot, Donate ========= */
-  document.getElementById('screenshot').onclick=()=>{ const url=canvas.toDataURL('image/png'); const a=document.createElement('a'); a.href=url; a.download=`kaleidoscope_${Date.now()}.png`; a.click(); };
+  // Load a gentle default gradient image (optional) — or just rely on fallback shader colors.
+  // Uncomment to auto-load a placeholder:
+  // loadImage('https://picsum.photos/1024/1024');
 
-  const recBtn=document.getElementById('rec'), dl=document.getElementById('download');
-  function pickMime(){ const list=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm']; for(const m of list){ if(window.MediaRecorder?.isTypeSupported?.(m)) return m; } return null; }
-  const mime=pickMime(); if(!mime){ recBtn.disabled=true; recBtn.title='Recording not supported here'; }
-  let mr=null, chunks=[];
-  recBtn.onclick=()=>{ if(!mime){ alert('Recording not supported. Try desktop Chrome.'); return; } if(mr && mr.state==='recording'){ mr.stop(); return; } try{ const stream=canvas.captureStream(60); const at=recMix.stream.getAudioTracks(); if(at.length) stream.addTrack(at[0]); mr=new MediaRecorder(stream,{mimeType:mime}); chunks=[]; mr.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); }; mr.onstop=()=>{ const blob=new Blob(chunks,{type:'video/webm'}); const url=URL.createObjectURL(blob); dl.href=url; dl.style.display='inline'; dl.textContent='Download'; dl.download=`kaleido_${Date.now()}.webm`; recBtn.textContent='⏺ Start'; }; mr.start(); recBtn.textContent='⏹ Stop'; dl.style.display='none'; }catch(err){ alert('Recording failed: '+err.message); } };
-
-  document.getElementById('donate').addEventListener('click',()=>{ window.open('https://cash.app/$lightwell333','_blank','noopener'); });
-
-  /* ========= Canvas gestures (image only; panel toggles) ========= */
-  const touchHidePanel = ()=>{ if(!panel.classList.contains('hidden')) panel.classList.add('hidden'); };
-  let pointers=new Map(), lastDist=0, lastTap=0;
-  let spinDrag=0, zoomBase=1, zoomDrag=0, twist=0;
-
-  canvas.addEventListener('pointerdown',async e=>{
-    pointers.set(e.pointerId,e); canvas.setPointerCapture?.(e.pointerId);
-    touchHidePanel();
-    const t=performance.now(); if(t-lastTap<350){ panel.classList.toggle('hidden'); } lastTap=t;
-    try{ await actx.resume(); }catch{}
-    if(video && video.play) try{ await video.play(); }catch{}
-  });
-  canvas.addEventListener('pointermove',e=>{
-    if(!pointers.has(e.pointerId)) return;
-    const prev=pointers.get(e.pointerId); pointers.set(e.pointerId,e);
-    if(pointers.size===1){
-      const dx=e.clientX-prev.clientX; spinDrag+=dx*0.002;           // visual rotation only
-    }else if(pointers.size===2){
-      const [a,b]=[...pointers.values()]; const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
-      if(!lastDist) lastDist=d; const dd=d-lastDist; lastDist=d; zoomDrag+=dd*0.003; // visual zoom only
-    }
-  });
-  function endPtr(e){ pointers.delete(e.pointerId); if(pointers.size<2) lastDist=0; }
-  canvas.addEventListener('pointerup',endPtr); canvas.addEventListener('pointercancel',endPtr); canvas.addEventListener('pointerleave',endPtr);
-
-  /* ========= FPS + Render loop ========= */
-  const fpsEl=document.getElementById('fps'); let lastF=performance.now(), frames=0;
-  let t0=performance.now(); let rot=0;
-  function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
-  function loop(){
-    requestAnimationFrame(loop);
-    const now=performance.now(); const dt=(now-t0)/1000; t0=now;
-    frames++; if(now-lastF>500){ fpsEl.textContent=(frames*1000/(now-lastF)).toFixed(0); lastF=now; frames=0; }
-
-    // Update video texture only when new frame
-    if(video && video.readyState>=2 && video.currentTime!==lastVideoTime){
-      gl.bindTexture(gl.TEXTURE_2D,TEX); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
-      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,video); lastVideoTime=video.currentTime;
-    }
-
-    // Visuals
-    rot += spinDrag * dt; spinDrag *= 0.96;
-    const zoom = clamp(zoomBase + zoomDrag, 0.2, 4); zoomDrag *= 0.9;
-
-    gl.useProgram(P);
-    gl.uniform2f(uR,canvas.width,canvas.height);
-    gl.uniform1f(uT,now/1000);
-    gl.uniform1i(uHAS,HAS?1:0);
-    gl.uniform1i(uK,Math.max(2,parseInt(wedges.value,10)));
-    gl.uniform1f(uROT,rot + 0.0*twist);
-    gl.uniform1f(uZOOM,zoom);
-    gl.uniform1f(uTW,twist);
-    gl.uniform1i(uMIR, mirror.value==='1'?1:0);
-    gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
-
-    // Audio Wheel → audio rate/filter
-    updateAudioFromWheel(dt);
-  }
-  loop();
 })();
 </script>
 </body>
