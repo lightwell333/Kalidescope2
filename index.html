@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -34,7 +33,8 @@
 <button id="hide" aria-label="Hide or show controls">Hide UI</button>
 <div id="dock" role="toolbar" aria-label="Kaleidoscope controls">
   <div class="group">
-    <input id="file" type="file" accept="image/*,image/heic,image/heif" title="Upload image"/>
+    <input id="file" type="file" accept="image/*,image/heic,image/heif" title="Upload image" style="display:none"/>
+    <button id="uploadBtn">Upload</button>
     <button id="clear">Clear</button>
     <button id="shot">Screenshot</button>
   </div>
@@ -54,11 +54,31 @@
     <label>Wedges</label><input id="wedges" type="range" min="4" max="36" step="1" value="12">
     <label>Zoom</label><input id="zoom" type="range" min="0.3" max="3.0" step="0.01" value="1.2">
     <label>Twist</label><input id="twist" type="range" min="-2.0" max="2.0" step="0.01" value="0.25">
+    <label style="display:flex;align-items:center;gap:6px"><input id="pulseToggle" type="checkbox"> Pulse</label>
     <button id="reset">Reset</button>
   </div>
 </div>
-<div id="emptyOverlay" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-  <button id="bigUpload" style="pointer-events:auto;background:rgba(12,12,16,.85);border:1px solid #2a3040;color:#f6f7fb;padding:14px 18px;border-radius:14px;font-size:16px">📷 Load Image</button>
+  <div class="group">
+    <div id="wheel" title="Turntable speed">
+      <div class="tick" style="transform:translateX(-50%) rotate(0deg)"></div>
+      <div class="tick" style="transform:translateX(-50%) rotate(30deg)"></div>
+      <div class="tick" style="transform:translateX(-50%) rotate(60deg)"></div>
+      <div class="tick" style="transform:translateX(-50%) rotate(90deg)"></div>
+      <div class="tick" style="transform:translateX(-50%) rotate(120deg)"></div>
+      <div class="tick" style="transform:translateX(-50%) rotate(150deg)"></div>
+      <div class="handle"></div>
+    </div>
+    <span class="chip"><span id="rpm">0.00</span> rpm</span>
+  </div>
+  <div class="group">
+    <label>Wedges</label><input id="wedges" type="range" min="4" max="36" step="1" value="12">
+    <label>Zoom</label><input id="zoom" type="range" min="0.3" max="3.0" step="0.01" value="1.2">
+    <label>Twist</label><input id="twist" type="range" min="-2.0" max="2.0" step="0.01" value="0.25">
+    <button id="reset">Reset</button>
+  </div>
+</div>
+<div id="emptyOverlay" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:60">
+  <button id="bigUpload" style="pointer-events:auto;background:rgba(12,12,16,.92);border:1px solid #2a3040;color:#f6f7fb;padding:16px 20px;border-radius:14px;font-size:17px">📷 Load Image</button>📷 Load Image</button>
 </div>
 <div id="toast">Tip: drag on canvas to rotate (↔) and twist (↕). Pinch to zoom. Double‑tap for pulse ⚡</div>
 <script>
@@ -88,7 +108,7 @@
     #else
     precision mediump float;
     #endif
-    varying vec2 v_uv; uniform vec2 u_res; uniform float u_time; uniform sampler2D u_tex; uniform bool u_hasTex; uniform float u_rot; uniform float u_zoom; uniform float u_twist; uniform float u_k; uniform float u_pulse; uniform vec2 u_touch;
+    varying vec2 v_uv; uniform vec2 u_res; uniform float u_time; uniform sampler2D u_tex; uniform bool u_hasTex; uniform float u_rot; uniform float u_zoom; uniform float u_twist; uniform float u_k; uniform float u_pulse; uniform bool u_enablePulse; uniform vec2 u_touch;
 
     float hash21(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y);} 
     float noise(vec2 p){ vec2 i=floor(p), f=fract(p); float a=hash21(i), b=hash21(i+vec2(1.,0.)); float c=hash21(i+vec2(0.,1.)), d=hash21(i+1.); vec2 u=f*f*(3.-2.*f); return mix(a,b,u.x)+ (c-a)*u.y*(1.-u.x) + (d-b)*u.x*u.y; }
@@ -118,7 +138,7 @@
       // pulse glow (double tap) — only when pulse > 0 to avoid stray ring
       float d = distance(uv, u_touch);
       float ring = 0.0;
-      if(u_pulse > 0.001){
+      if(u_enablePulse && u_pulse > 0.001){
         ring = smoothstep(0.0, 0.02 + 0.15*u_pulse, abs(d - (0.15+0.6*u_pulse)));
       }
       float glow = ring * (0.6 + 0.6*u_pulse);
@@ -142,7 +162,7 @@
   const a_pos = gl.getAttribLocation(prog, 'a_pos'); gl.enableVertexAttribArray(a_pos); gl.vertexAttribPointer(a_pos, 2, gl.FLOAT, false, 0, 0);
 
   const U = n => gl.getUniformLocation(prog, n);
-  const u_res=U('u_res'), u_time=U('u_time'), u_tex=U('u_tex'), u_hasTex=U('u_hasTex'), u_rotU=U('u_rot'), u_zoomU=U('u_zoom'), u_twistU=U('u_twist'), u_k=U('u_k'), u_pulse=U('u_pulse'), u_touch=U('u_touch');
+  const u_res=U('u_res'), u_time=U('u_time'), u_tex=U('u_tex'), u_hasTex=U('u_hasTex'), u_rotU=U('u_rot'), u_zoomU=U('u_zoom'), u_twistU=U('u_twist'), u_k=U('u_k'), u_pulse=U('u_pulse'), u_enablePulse=U('u_enablePulse'), u_touch=U('u_touch');
 
   // Texture (NPOT-safe)
   const mediaTex = gl.createTexture();
@@ -169,7 +189,8 @@
   }
 
   // ---------- Controls ----------
-  const file=document.getElementById('file'), clearBtn=document.getElementById('clear'), shotBtn=document.getElementById('shot'), hideBtn=document.getElementById('hide');
+  const file=document.getElementById('file'), uploadBtn=document.getElementById('uploadBtn'), clearBtn=document.getElementById('clear'), shotBtn=document.getElementById('shot'), hideBtn=document.getElementById('hide');
+  const pulseToggle=document.getElementById('pulseToggle');
   const emptyOverlay=document.getElementById('emptyOverlay'), bigUpload=document.getElementById('bigUpload');
   const zoom=document.getElementById('zoom'), twist=document.getElementById('twist'), wedges=document.getElementById('wedges'), resetBtn=document.getElementById('reset');
 
@@ -207,10 +228,16 @@
   });
   // Big central upload button
   bigUpload.addEventListener('click', ()=> file.click());
+  uploadBtn.addEventListener('click', ()=> file.click());
   // Drag & drop onto canvas
   ;['dragenter','dragover'].forEach(ev=> canvas.addEventListener(ev, e=>{ e.preventDefault(); e.dataTransfer.dropEffect='copy'; }));
   canvas.addEventListener('drop', e=>{
     e.preventDefault(); const f=e.dataTransfer.files && e.dataTransfer.files[0]; if(!f) return;
+    if(!f.type || (!f.type.startsWith('image/') && !/heic|heif/i.test(f.name))){ toast('Drop an image file'); return; }
+    const img=new Image(); img.onload=()=>{ uploadToTex(img); toast('Image loaded'); }; img.onerror=()=>toast('Could not load that image'); img.src=URL.createObjectURL(f);
+  });
+  // Pulse toggle
+  pulseToggle.addEventListener('change', ()=>{ toast(pulseToggle.checked?'Pulse ON':'Pulse OFF'); }); const f=e.dataTransfer.files && e.dataTransfer.files[0]; if(!f) return;
     if(!f.type || (!f.type.startsWith('image/') && !/heic|heif/i.test(f.name))){ toast('Drop an image file'); return; }
     const img=new Image(); img.onload=()=>{ uploadToTex(img); toast('Image loaded'); }; img.onerror=()=>toast('Could not load that image'); img.src=URL.createObjectURL(f);
   }); return; }
@@ -264,6 +291,7 @@
     gl.uniform1f(u_twistU, twistVal);
     gl.uniform1f(u_k, wedgesVal);
     gl.uniform1f(u_pulse, pulse);
+    gl.uniform1i(u_enablePulse, pulseToggle && pulseToggle.checked ? 1 : 0);
     gl.uniform2f(u_touch, touchUV[0], touchUV[1]);
     gl.uniform1i(u_hasTex, hasTex?1:0);
 
