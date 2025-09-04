@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Kaleidoscope • Turntable + HyperWarp</title>
+<title>Kaleidoscope • Turntable (No Warp)</title>
 <style>
   :root{
     --glass: rgba(12,12,16,.8); --fg:#f6f7fb; --muted:#bac1d6; --line:#2a3040; --accent:#7ae7ff;
@@ -71,7 +71,6 @@
   <div class="group">
     <input id="file" type="file" accept="image/*,video/*" title="Upload image or video"/>
     <button id="clear">Clear</button>
-    <button id="hyper">HyperWarp</button>
   </div>
   <div class="group">
     <div id="wheel" title="Turntable speed">
@@ -121,7 +120,7 @@
       gl_Position = vec4(a_pos,0.0,1.0);
     }`;
 
-  // Fragment: kaleidoscope with mirrored wedges + HyperWarp + pulse burst + fallback plasma
+  // Fragment: kaleidoscope with mirrored wedges + pulse burst + fallback plasma
   const fsrc = `
     precision highp float;
     varying vec2 v_uv;
@@ -133,9 +132,9 @@
     uniform float u_zoom;
     uniform float u_twist;
     uniform float u_k;         // wedges
-    uniform float u_hyper;     // 0..1 HyperWarp strength
     uniform float u_pulse;     // decaying pulse
     uniform vec2  u_touch;     // 0..1 last touch
+
     // rotate
     mat2 r2(float a){ float c=cos(a), s=sin(a); return mat2(c,-s,s,c); }
 
@@ -172,28 +171,13 @@
       }
     }
 
-    // Chromatic aberration sample
-    vec3 sampleCA(vec2 uv, float r){
-      float off = r*0.003;
-      float angle = 6.283*fract(u_time*0.03);
-      vec2 dir = vec2(cos(angle), sin(angle));
-      float rr = length(uv-0.5);
-      vec2 d = dir*off*(0.8 + 0.6*rr);
-      float k = 0.6 + 0.4*sin(6.283*rr + u_time*2.0);
-      float o2 = off*k;
-      float rC = texture2D(u_tex, uv + d).r;
-      float gC = texture2D(u_tex, uv).g;
-      float bC = texture2D(u_tex, uv - d).b;
-      return vec3(rC,gC,bC);
-    }
-
     void main(){
       vec2 uv = v_uv;
       // center and normalize coords keeping aspect
       vec2 p = (uv - 0.5);
       p.x *= u_res.x / u_res.y;
 
-      // turntable base rotation + speed
+      // base rotation from turntable
       float rot = u_rot;
 
       // kaleidoscope polar mapping
@@ -204,8 +188,8 @@
       float seg = 6.283 / k;
       // fold into wedge and mirror every other
       float a = mod(ang, seg);
-      float mirrored = step(seg*0.5, a);
-      a = min(a, seg - a); // mirror fold
+      a = min(a, seg - a); // mirror fold so adjoining wedges mirror
+
       // twist (radial)
       float twist = u_twist * rad*2.0;
       a += twist;
@@ -215,15 +199,6 @@
 
       // zoom: move inward/outward
       q /= u_zoom;
-
-      // HyperWarp: radial tunnel + chromatic glow controlled by u_hyper (0..1)
-      float hw = u_hyper;
-      if(hw>0.001){
-        float warp = (0.25 + 0.75*hw);
-        float swirl = hw*0.8 * sin(rad*8.0 - u_time*2.0);
-        q *= (1.0/(1.0 + warp*rad*1.4));
-        q *= r2(swirl);
-      }
 
       // map q back to 0..1 for texture sampling
       vec2 suv = q;
@@ -236,22 +211,14 @@
       float ring = smoothstep(0.0, 0.02 + 0.15*pulse, abs(d - (0.15+0.6*pulse)));
       float glow = ring * (0.6 + 0.6*pulse);
 
-      vec3 col;
-      if(u_hasTex){
-        // with media: add mild chromatic aberration under HyperWarp
-        vec3 base = sampleTex(suv);
-        vec3 ca   = sampleCA(suv, hw);
-        col = mix(base, ca, 0.55*hw);
-      } else {
-        col = fallbackTex(suv);
-      }
+      vec3 col = sampleTex(suv);
 
       // vignette & pulse glow
       float vig = smoothstep(1.1, 0.25, length(p));
       col *= vig + 0.25;
       col += glow*vec3(1.2,1.0,1.6);
 
-      // subtle mirror seam smoothing
+      // subtle seam smoothing on mirrors
       col *= 0.98 + 0.02*cos(a* k * 0.5);
 
       gl_FragColor = vec4(col,1.0);
@@ -261,7 +228,7 @@
   function compile(type, src){
     const s = gl.createShader(type);
     gl.shaderSource(s, src); gl.compileShader(s);
-    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+    if(!gl.getShaderParameter(s, gl.COMPLETE_STATUS) && !gl.getShaderParameter(s, gl.COMPILE_STATUS)){
       throw gl.getShaderInfoLog(s);
     }
     return s;
@@ -299,7 +266,6 @@
   const u_zoom  = U('u_zoom');
   const u_twist = U('u_twist');
   const u_k     = U('u_k');
-  const u_hyper = U('u_hyper');
   const u_pulse = U('u_pulse');
   const u_touch = U('u_touch');
 
@@ -326,13 +292,11 @@
   // ---------- Controls ----------
   const file = document.getElementById('file');
   const clearBtn = document.getElementById('clear');
-  const hyperBtn = document.getElementById('hyper');
   const hideBtn  = document.getElementById('hide');
   const zoom = document.getElementById('zoom');
   const twist = document.getElementById('twist');
   const wedges = document.getElementById('wedges');
 
-  let hyper = 0.0;
   let rot = 0.0;
   let rpm = 0.0;        // rotations per minute from wheel
   let twistVal = parseFloat(twist.value);
@@ -399,13 +363,6 @@
   twist.addEventListener('input',()=> twistVal= parseFloat(twist.value));
   wedges.addEventListener('input',()=> wedgesVal=parseFloat(wedges.value));
 
-  // HyperWarp toggle (hold to ramp up)
-  let hyperOn = false;
-  hyperBtn.addEventListener('click', ()=>{
-    hyperOn = !hyperOn;
-    showToast(hyperOn ? 'HyperWarp ON' : 'HyperWarp OFF');
-  });
-
   // Dock hide
   const dock = document.getElementById('dock');
   let dockVisible = true;
@@ -420,7 +377,6 @@
     const f = e.target.files && e.target.files[0];
     if(!f) return;
     if(f.type.startsWith('image/')){
-      // image
       const img = new Image();
       img.onload = ()=> uploadToTex(img);
       img.src = URL.createObjectURL(f);
@@ -483,10 +439,6 @@
     const radPerSec = rpm * 2*Math.PI / 60;
     rot += radPerSec * dt;
 
-    // gently ramp HyperWarp
-    const targetHyper = hyperOn ? 1.0 : 0.0;
-    hyper += (targetHyper - hyper) * 0.06;
-
     // pulse decay
     pulse *= 0.935;
 
@@ -502,7 +454,6 @@
     gl.uniform1f(u_zoom, zoomVal);
     gl.uniform1f(u_twist, twistVal);
     gl.uniform1f(u_k, wedgesVal);
-    gl.uniform1f(u_hyper, hyper);
     gl.uniform1f(u_pulse, pulse);
     gl.uniform2f(u_touch, touchUV[0], touchUV[1]);
     gl.uniform1i(u_hasTex, hasTex ? 1 : 0);
