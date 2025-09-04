@@ -12,32 +12,28 @@
   html,body{margin:0;height:100%;background:#000;color:var(--fg);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial}
   canvas{display:block;width:100vw;height:100vh;touch-action:none;cursor:grab}
 
-  /* Dock */
-  #dock{
-    position:fixed;left:50%;top:10px;transform:translateX(-50%);
-    display:flex;gap:10px;align-items:center;
-    background:var(--glass);border:1px solid var(--line);border-radius:14px;
-    padding:8px 10px;backdrop-filter: blur(10px);z-index:20; user-select:none;
-  }
-  #dock.collapsed { padding:6px 8px; }
-  #dock button,#dock label,#dock input[type="range"]{
-    font:600 12px/1 system-ui; color:var(--fg);
-  }
-  #dock .group{display:flex;gap:10px;align-items:center}
-  #dock .v{display:flex;flex-direction:column;gap:6px}
-  #dock .lab{font:600 10px;color:var(--muted);margin-top:-2px}
-  #dock input[type="range"]{width:120px}
-  #dock input[type="file"]{display:none}
-  .pill{
-    background:#111a; border:1px solid var(--line); padding:6px 10px; border-radius:12px;
-  }
-  .btn{
-    background:#0a0f17; border:1px solid var(--line);
-    padding:8px 10px;border-radius:10px;cursor:pointer
-  }
-  .btn:hover{outline:1px solid #395;filter:brightness(1.1)}
-  .icon{font-size:16px;display:inline-block;transform:translateY(1px)}
+  /* Dock *//* Dock as a boxed panel */
+#dock{
+  position:fixed; left:12px; bottom:12px; right:auto; top:auto; transform:none;
+  width:min(460px, 92vw); max-height:72vh; overflow:auto;
+  background:var(--glass); border:1px solid var(--line); border-radius:14px;
+  padding:12px; backdrop-filter: blur(10px); z-index:20; user-select:none;
 
+  display:grid; grid-template-columns: 1fr 1fr; gap:12px;
+}
+#dock.collapsed{ padding:8px; height:auto; max-height:none; overflow:visible; }
+#dock .group{ display:flex; flex-direction:column; gap:6px; }
+#dock .lab{ font:600 11px/1.1 system-ui; color:var(--muted); }
+#dock input[type="range"]{ width:100%; }
+
+#dock .row{ grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:10px; }
+#dock .btn, #dock label.btn{ flex:0 0 auto; }
+
+@media (max-width:700px){
+  #dock{ grid-template-columns: 1fr; width:min(96vw, 520px); }
+}
+
+  #
   /* Toggle */
   #toggle{
     position:fixed;right:10px;top:10px;z-index:21;
@@ -566,4 +562,29 @@
 })();
 </script>
 </body>
-</html>
+</html><div id="dock">
+  <div class="row">
+    <label class="btn" for="mediaIn">🖼️ Image/Video</label>
+    <input id="mediaIn" type="file" accept="image/*,video/*"/>
+    <label class="btn" for="audioIn">🎵 Audio</label>
+    <input id="audioIn" type="file" accept="audio/*"/>
+    <button id="shot" class="btn">📸 Screenshot</button>
+    <button id="rec" class="btn">⏺ Start</button>
+    <button id="stop" class="btn" disabled>⏹ Stop</button>
+  </div>
+
+  <div class="group"><div class="lab">Wedges</div><input id="wedges" type="range" min="3" max="48" step="1" value="12"></div>
+  <div class="group"><div class="lab">Zoom</div><input id="zoom" type="range" min="0.2" max="3" step="0.01" value="1.1"></div>
+  <div class="group"><div class="lab">Spin</div><input id="spin" type="range" min="-2" max="2" step="0.001" value="0.15"></div>
+  <div class="group"><div class="lab">Twist</div><input id="twist" type="range" min="-6" max="6" step="0.01" value="0.6"></div>
+  <div class="group"><div class="lab">Tunnel</div><input id="tunnel" type="range" min="0" max="1" step="0.001" value="0.18"></div>
+  <div class="group"><div class="lab">Soft Edge</div><input id="soft" type="range" min="0" max="0.2" step="0.001" value="0.04"></div>
+
+  <div class="row">
+    <button id="mode" class="btn pill" title="Switch between Image and Procedural">Mode: Image</button>
+    <button id="random" class="btn">🎲 Chaos</button>
+    <button id="reset" class="btn">↺ Reset</button>
+  </div>
+</div>#toggle{ right:auto; left:12px; top:auto; bottom:12px; margin-left:0; }
+
+
