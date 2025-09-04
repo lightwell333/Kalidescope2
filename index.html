@@ -34,7 +34,7 @@
 <button id="hide" aria-label="Hide or show controls">Hide UI</button>
 <div id="dock" role="toolbar" aria-label="Kaleidoscope controls">
   <div class="group">
-    <input id="file" type="file" accept="image/*" title="Upload image"/>
+    <input id="file" type="file" accept="image/*,image/heic,image/heif" title="Upload image"/>
     <button id="clear">Clear</button>
     <button id="shot">Screenshot</button>
   </div>
@@ -56,6 +56,9 @@
     <label>Twist</label><input id="twist" type="range" min="-2.0" max="2.0" step="0.01" value="0.25">
     <button id="reset">Reset</button>
   </div>
+</div>
+<div id="emptyOverlay" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+  <button id="bigUpload" style="pointer-events:auto;background:rgba(12,12,16,.85);border:1px solid #2a3040;color:#f6f7fb;padding:14px 18px;border-radius:14px;font-size:16px">📷 Load Image</button>
 </div>
 <div id="toast">Tip: drag on canvas to rotate (↔) and twist (↕). Pinch to zoom. Double‑tap for pulse ⚡</div>
 <script>
@@ -112,9 +115,12 @@
       // map back to 0..1 for sampling
       vec2 suv = q; suv.x /= (u_res.x/u_res.y); suv = suv*0.5 + 0.5;
 
-      // pulse glow (double tap)
+      // pulse glow (double tap) — only when pulse > 0 to avoid stray ring
       float d = distance(uv, u_touch);
-      float ring = smoothstep(0.0, 0.02 + 0.15*u_pulse, abs(d - (0.15+0.6*u_pulse)));
+      float ring = 0.0;
+      if(u_pulse > 0.001){
+        ring = smoothstep(0.0, 0.02 + 0.15*u_pulse, abs(d - (0.15+0.6*u_pulse)));
+      }
       float glow = ring * (0.6 + 0.6*u_pulse);
 
       vec3 col = sampleTex(suv);
@@ -150,15 +156,21 @@
 
   let hasTex=false;
   function uploadToTex(img){
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, mediaTex);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);
-    hasTex=true;
+    try{
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, mediaTex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);
+      hasTex=true;
+      emptyOverlay.style.display='none';
+    }catch(err){
+      toast('Upload failed: '+err);
+    }
   }
 
   // ---------- Controls ----------
   const file=document.getElementById('file'), clearBtn=document.getElementById('clear'), shotBtn=document.getElementById('shot'), hideBtn=document.getElementById('hide');
+  const emptyOverlay=document.getElementById('emptyOverlay'), bigUpload=document.getElementById('bigUpload');
   const zoom=document.getElementById('zoom'), twist=document.getElementById('twist'), wedges=document.getElementById('wedges'), resetBtn=document.getElementById('reset');
 
   let rot=0, rpm=0, zoomVal=parseFloat(zoom.value), twistVal=parseFloat(twist.value), wedgesVal=parseFloat(wedges.value);
@@ -186,10 +198,25 @@
 
   // File
   file.addEventListener('change', (e)=>{
-    const f=e.target.files && e.target.files[0]; if(!f) return; if(!f.type.startsWith('image/')){ toast('Please choose an image'); return; }
+    const f=e.target.files && e.target.files[0]; if(!f) return;
+    if(!f.type || (!f.type.startsWith('image/') && !/heic|heif/i.test(f.name))){ toast('Please choose an image'); return; }
+    const img = new Image();
+    img.onload=()=>{ uploadToTex(img); toast('Image loaded'); };
+    img.onerror=()=>toast('Could not load that image');
+    img.src = URL.createObjectURL(f);
+  });
+  // Big central upload button
+  bigUpload.addEventListener('click', ()=> file.click());
+  // Drag & drop onto canvas
+  ;['dragenter','dragover'].forEach(ev=> canvas.addEventListener(ev, e=>{ e.preventDefault(); e.dataTransfer.dropEffect='copy'; }));
+  canvas.addEventListener('drop', e=>{
+    e.preventDefault(); const f=e.dataTransfer.files && e.dataTransfer.files[0]; if(!f) return;
+    if(!f.type || (!f.type.startsWith('image/') && !/heic|heif/i.test(f.name))){ toast('Drop an image file'); return; }
+    const img=new Image(); img.onload=()=>{ uploadToTex(img); toast('Image loaded'); }; img.onerror=()=>toast('Could not load that image'); img.src=URL.createObjectURL(f);
+  }); return; }
     const img = new Image(); img.onload=()=>{ uploadToTex(img); toast('Image loaded'); }; img.src=URL.createObjectURL(f);
   });
-  clearBtn.addEventListener('click', ()=>{ hasTex=false; toast('Cleared — neon plasma fallback'); });
+  clearBtn.addEventListener('click', ()=>{ hasTex=false; emptyOverlay.style.display='flex'; toast('Cleared — neon plasma fallback'); }); });
 
   // Screenshot
   shotBtn.addEventListener('click', ()=>{
@@ -252,4 +279,3 @@
 </script>
 </body>
 </html>
-
