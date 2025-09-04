@@ -1,72 +1,32 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Kaleidoscope • Turntable (No Warp)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Kaleidoscope • Touch‑Safe Clean (No Warp)</title>
 <style>
-  :root{
-    --glass: rgba(12,12,16,.8); --fg:#f6f7fb; --muted:#bac1d6; --line:#2a3040; --accent:#7ae7ff;
-  }
-  html,body{margin:0;height:100%;background:#000;color:var(--fg);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial}
-  canvas{display:block;width:100vw;height:100vh;touch-action:none;cursor:grab}
-  /* --- UI Dock --- */
-  #dock{
-    position:fixed;left:50%;top:10px;transform:translateX(-50%);
-    display:flex;gap:10px;align-items:center;z-index:20;
-    background:var(--glass);backdrop-filter:blur(10px);border:1px solid var(--line);
-    padding:10px 12px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)
-  }
-  #dock .group{display:flex;gap:10px;align-items:center}
-  #dock label{font-size:12px;color:var(--muted)}
-  #dock input[type="range"]{width:120px}
-  #dock button, .chip{
-    background:#0f1320;border:1px solid var(--line);color:var(--fg);border-radius:12px;
-    padding:8px 10px;font-size:13px;cursor:pointer
-  }
-  #dock button:hover{border-color:#3b425a}
-  #dock .chip{font-variant-numeric:tabular-nums}
-  #hide{
-    position:fixed;right:10px;top:10px;z-index:21;background:var(--glass);border:1px solid var(--line);
-    color:var(--fg);padding:8px 10px;border-radius:12px;backdrop-filter:blur(10px);cursor:pointer
-  }
-  /* Turntable wheel */
-  #wheel{
-    width:60px;height:60px;border-radius:50%;position:relative;user-select:none;
-    background:radial-gradient(120% 120% at 30% 30%, #15192a, #0b0f1e);
-    border:1px solid var(--line);box-shadow:inset 0 0 0 2px #0b0f1e, 0 8px 16px rgba(0,0,0,.35)
-  }
-  #wheel:before{
-    content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;border-radius:50%;
-    background:#9cf;border:1px solid #67c;transform:translate(-50%,-50%)
-  }
-  #wheel .tick{
-    position:absolute;left:50%;top:4px;width:2px;height:12px;background:#8ae;
-    transform-origin:50% 26px;border-radius:1px;opacity:.8
-  }
-  #wheel .handle{
-    position:absolute;left:50%;top:-4px;width:8px;height:18px;background:#9cf;border-radius:2px;
-    transform:translateX(-50%);box-shadow:0 0 10px rgba(122,231,255,.6)
-  }
-  /* Mobile condense */
-  @media (max-width:760px){
-    #dock{flex-wrap:wrap;gap:8px}
-    #dock input[type="range"]{width:90px}
-  }
-  /* Tiny toast */
-  #toast{
-    position:fixed;left:50%;bottom:14px;transform:translateX(-50%);
-    background:var(--glass);border:1px solid var(--line);padding:8px 12px;border-radius:12px;
-    font-size:13px;color:var(--muted);z-index:30;opacity:0;pointer-events:none;transition:.3s opacity
-  }
-  #toast.show{opacity:1}
+  :root{ --glass: rgba(12,12,16,.8); --fg:#f6f7fb; --muted:#bac1d6; --line:#2a3040; }
+  html,body{ margin:0; height:100%; background:#000; color:var(--fg); font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial; }
+  canvas{ display:block; width:100vw; height:100vh; touch-action:none; cursor:grab; }
+  #hide{ position:fixed; right:10px; top:10px; z-index:20; background:var(--glass); border:1px solid var(--line); color:var(--fg); padding:8px 10px; border-radius:12px; backdrop-filter:blur(10px); cursor:pointer }
+  #dock{ position:fixed; left:50%; top:10px; transform:translateX(-50%); display:flex; gap:10px; align-items:center; z-index:19; background:var(--glass); backdrop-filter:blur(10px); border:1px solid var(--line); padding:10px 12px; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.35) }
+  #dock .group{ display:flex; gap:10px; align-items:center }
+  #dock label{ font-size:12px; color:var(--muted) }
+  #dock input[type=range]{ width:120px }
+  #dock button, .chip{ background:#0f1320; border:1px solid var(--line); color:var(--fg); border-radius:12px; padding:8px 10px; font-size:13px; cursor:pointer }
+  #wheel{ width:60px;height:60px;border-radius:50%;position:relative;user-select:none;background:radial-gradient(120% 120% at 30% 30%, #15192a, #0b0f1e);border:1px solid var(--line);box-shadow:inset 0 0 0 2px #0b0f1e, 0 8px 16px rgba(0,0,0,.35) }
+  #wheel:before{ content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;border-radius:50%;background:#9cf;border:1px solid #67c;transform:translate(-50%,-50%) }
+  #wheel .tick{ position:absolute;left:50%;top:4px;width:2px;height:12px;background:#8ae; transform-origin:50% 26px;border-radius:1px;opacity:.85 }
+  #wheel .handle{ position:absolute;left:50%;top:-4px;width:8px;height:18px;background:#9cf;border-radius:2px;transform:translateX(-50%);box-shadow:0 0 10px rgba(122,231,255,.6) }
+  @media (max-width:760px){ #dock{flex-wrap:wrap;gap:8px} #dock input[type=range]{width:90px} }
+  #toast{ position:fixed;left:50%;bottom:14px;transform:translateX(-50%); background:var(--glass); border:1px solid var(--line); padding:8px 12px; border-radius:12px; font-size:13px; color:var(--muted); z-index:30; opacity:0; pointer-events:none; transition:.3s opacity }
+  #toast.show{ opacity:1 }
 </style>
 </head>
 <body>
 <canvas id="gl"></canvas>
-
 <button id="hide" aria-label="Hide or show controls">Hide UI</button>
-
 <div id="dock" role="toolbar" aria-label="Kaleidoscope controls">
   <div class="group">
     <input id="file" type="file" accept="image/*,video/*" title="Upload image or video"/>
@@ -90,13 +50,11 @@
     <label>Wedges</label><input id="wedges" type="range" min="4" max="24" step="1" value="12">
   </div>
 </div>
-
-<div id="toast">Double-tap canvas for a pulse burst ⚡</div>
-
+<div id="toast">Double‑tap canvas for a pulse burst ⚡</div>
 <script>
 (() => {
   const canvas = document.getElementById('gl');
-  const gl = canvas.getContext('webgl', {antialias:false, preserveDrawingBuffer:true});
+  const gl = canvas.getContext('webgl', { antialias:false, preserveDrawingBuffer:true });
   if(!gl){ alert('WebGL not supported'); return; }
 
   // ---------- Resize ----------
@@ -104,374 +62,118 @@
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = Math.floor(innerWidth * dpr);
     const h = Math.floor(innerHeight * dpr);
-    if(canvas.width!==w || canvas.height!==h){
-      canvas.width = w; canvas.height = h;
-    }
+    if(canvas.width!==w || canvas.height!==h){ canvas.width = w; canvas.height = h; }
     gl.viewport(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight);
   }
   addEventListener('resize', fit, {passive:true}); fit();
 
-  // ---------- Shader sources ----------
+  // ---------- Shaders ----------
   const vsrc = `
-    attribute vec2 a_pos;
-    varying vec2 v_uv;
-    void main(){
-      v_uv = a_pos*0.5+0.5;
-      gl_Position = vec4(a_pos,0.0,1.0);
-    }`;
+    attribute vec2 a_pos; varying vec2 v_uv; void main(){ v_uv=a_pos*0.5+0.5; gl_Position=vec4(a_pos,0.0,1.0);} 
+  `;
 
-  // Fragment: kaleidoscope with mirrored wedges + pulse burst + fallback plasma
   const fsrc = `
+    #ifdef GL_FRAGMENT_PRECISION_HIGH
     precision highp float;
-    varying vec2 v_uv;
-    uniform vec2  u_res;
-    uniform float u_time;
-    uniform sampler2D u_tex;
-    uniform bool  u_hasTex;
-    uniform float u_rot;
-    uniform float u_zoom;
-    uniform float u_twist;
-    uniform float u_k;         // wedges
-    uniform float u_pulse;     // decaying pulse
-    uniform vec2  u_touch;     // 0..1 last touch
+    #else
+    precision mediump float;
+    #endif
+    varying vec2 v_uv; uniform vec2 u_res; uniform float u_time; uniform sampler2D u_tex; uniform bool u_hasTex; uniform float u_rot; uniform float u_zoom; uniform float u_twist; uniform float u_k; uniform float u_pulse; uniform vec2 u_touch;
 
-    // rotate
-    mat2 r2(float a){ float c=cos(a), s=sin(a); return mat2(c,-s,s,c); }
+    float hash21(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y);} 
+    float noise(vec2 p){ vec2 i=floor(p), f=fract(p); float a=hash21(i), b=hash21(i+vec2(1.,0.)); float c=hash21(i+vec2(0.,1.)), d=hash21(i+1.); vec2 u=f*f*(3.-2.*f); return mix(a,b,u.x)+ (c-a)*u.y*(1.-u.x) + (d-b)*u.x*u.y; }
+    vec3 fallbackTex(vec2 uv){ vec2 p=(uv-0.5)*2.0; float t=u_time*0.2; float n=0.0; for(int i=0;i<4;i++){ float s=float(i+1); n+=noise(p*s+t*s);} n/=4.0; float a=0.5+0.5*sin(6.283*(n+t)); vec3 col=0.5+0.5*cos(6.283*vec3(0.,0.33,0.66)+a*3.2); return pow(col, vec3(1.2)); }
 
-    // simple hash/noise
-    float hash21(vec2 p){ p=fract(p*vec2(123.34, 456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
-    float noise(vec2 p){
-      vec2 i=floor(p), f=fract(p);
-      float a=hash21(i), b=hash21(i+vec2(1,0));
-      float c=hash21(i+vec2(0,1)), d=hash21(i+1.0);
-      vec2 u=f*f*(3.0-2.0*f);
-      return mix(a,b,u.x)+ (c-a)*u.y*(1.0-u.x) + (d-b)*u.x*u.y;
-    }
-
-    vec3 fallbackTex(vec2 uv){
-      // Neon plasma fallback when no texture loaded
-      vec2 p = (uv-0.5)*2.0;
-      float t = u_time*0.2;
-      float n = 0.0;
-      for(int i=0;i<4;i++){
-        float s = float(i+1);
-        n += noise(p*s + t*s);
-      }
-      n /= 4.0;
-      float a = 0.5 + 0.5*sin(6.283*(n + t));
-      vec3 col = 0.5 + 0.5*cos(6.283*vec3(0.0,0.33,0.66) + a*3.2);
-      return pow(col, vec3(1.2));
-    }
-
-    vec3 sampleTex(vec2 uv){
-      if(u_hasTex){
-        return texture2D(u_tex, uv).rgb;
-      } else {
-        return fallbackTex(uv);
-      }
-    }
+    vec3 sampleTex(vec2 uv){ return u_hasTex ? texture2D(u_tex, uv).rgb : fallbackTex(uv); }
 
     void main(){
-      vec2 uv = v_uv;
-      // center and normalize coords keeping aspect
-      vec2 p = (uv - 0.5);
-      p.x *= u_res.x / u_res.y;
-
-      // base rotation from turntable
-      float rot = u_rot;
-
-      // kaleidoscope polar mapping
-      float k = max(2.0, floor(u_k));
-      float ang = atan(p.y, p.x) + rot;
-      float rad = length(p);
-
-      float seg = 6.283 / k;
-      // fold into wedge and mirror every other
-      float a = mod(ang, seg);
-      a = min(a, seg - a); // mirror fold so adjoining wedges mirror
-
-      // twist (radial)
-      float twist = u_twist * rad*2.0;
-      a += twist;
-
-      // rebuild coords after fold
-      vec2 q = vec2(cos(a), sin(a)) * rad;
-
-      // zoom: move inward/outward
-      q /= u_zoom;
-
-      // map q back to 0..1 for texture sampling
-      vec2 suv = q;
-      suv.x /= (u_res.x/u_res.y);
-      suv = suv*0.5 + 0.5;
-
-      // pulse burst (double-tap): radial shockwave brightness + slight zoom pop
-      float d = distance(uv, u_touch);
-      float pulse = u_pulse;
-      float ring = smoothstep(0.0, 0.02 + 0.15*pulse, abs(d - (0.15+0.6*pulse)));
-      float glow = ring * (0.6 + 0.6*pulse);
-
-      vec3 col = sampleTex(suv);
-
-      // vignette & pulse glow
-      float vig = smoothstep(1.1, 0.25, length(p));
-      col *= vig + 0.25;
-      col += glow*vec3(1.2,1.0,1.6);
-
-      // subtle seam smoothing on mirrors
-      col *= 0.98 + 0.02*cos(a* k * 0.5);
-
-      gl_FragColor = vec4(col,1.0);
-    }`;
-
-  // ---------- GL boilerplate ----------
-  function compile(type, src){
-    const s = gl.createShader(type);
-    gl.shaderSource(s, src); gl.compileShader(s);
-    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
-      throw gl.getShaderInfoLog(s);
+      vec2 uv = v_uv; vec2 p = (uv-0.5); p.x *= u_res.x/u_res.y; float rot=u_rot; float k=max(2.0,floor(u_k)); float ang=atan(p.y,p.x)+rot; float rad=length(p); float seg=6.283/k; float a=mod(ang,seg); a=min(a, seg-a); a += u_twist * rad*2.0; vec2 q=vec2(cos(a),sin(a))*rad; q/=u_zoom; vec2 suv=q; suv.x/= (u_res.x/u_res.y); suv=suv*0.5+0.5; float d=distance(uv,u_touch); float pulse=u_pulse; float ring=smoothstep(0.0, 0.02+0.15*pulse, abs(d-(0.15+0.6*pulse))); float glow=ring*(0.6+0.6*pulse); vec3 col = sampleTex(suv); float vig = smoothstep(1.1,0.25,length(p)); col *= vig+0.25; col += glow*vec3(1.2,1.0,1.6); col *= 0.98 + 0.02*cos(a*k*0.5); gl_FragColor=vec4(col,1.0);
     }
-    return s;
-  }
-  function program(vs, fs){
-    const p = gl.createProgram();
-    gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
-    gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
-    gl.linkProgram(p);
-    if(!gl.getProgramParameter(p, gl.LINK_STATUS)){
-      throw gl.getProgramInfoLog(p);
-    }
-    return p;
-  }
-  const prog = program(vsrc, fsrc);
-  gl.useProgram(prog);
+  `;
 
-  const quad = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, quad);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-    -1,-1,  1,-1,  -1,1,
-    -1, 1,  1,-1,   1,1
-  ]), gl.STATIC_DRAW);
-  const a_pos = gl.getAttribLocation(prog, 'a_pos');
-  gl.enableVertexAttribArray(a_pos);
-  gl.vertexAttribPointer(a_pos, 2, gl.FLOAT, false, 0, 0);
+  function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 2200); }
+  function compile(type, src){ const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){ const log=gl.getShaderInfoLog(s); toast((type===gl.VERTEX_SHADER?'Vertex':'Fragment')+': '+log); throw log; } return s; }
+  function program(vs, fs){ const p=gl.createProgram(); gl.attachShader(p,compile(gl.VERTEX_SHADER,vs)); gl.attachShader(p,compile(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p); if(!gl.getProgramParameter(p, gl.LINK_STATUS)){ const log=gl.getProgramInfoLog(p); toast('Link: '+log); throw log; } return p; }
 
-  // uniforms
-  const U = name => gl.getUniformLocation(prog, name);
-  const u_res   = U('u_res');
-  const u_time  = U('u_time');
-  const u_tex   = U('u_tex');
-  const u_hasTex= U('u_hasTex');
-  const u_rot   = U('u_rot');
-  const u_zoom  = U('u_zoom');
-  const u_twist = U('u_twist');
-  const u_k     = U('u_k');
-  const u_pulse = U('u_pulse');
-  const u_touch = U('u_touch');
+  const prog = program(vsrc, fsrc); gl.useProgram(prog);
+  const quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([ -1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1 ]), gl.STATIC_DRAW);
+  const a_pos = gl.getAttribLocation(prog,'a_pos'); gl.enableVertexAttribArray(a_pos); gl.vertexAttribPointer(a_pos,2,gl.FLOAT,false,0,0);
 
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, mediaTex);
-  gl.uniform1i(u_tex, 0);
+  const U=n=>gl.getUniformLocation(prog,n);
+  const u_res=U('u_res'), u_time=U('u_time'), u_tex=U('u_tex'), u_hasTex=U('u_hasTex'), u_rot=U('u_rot'), u_zoomU=U('u_zoom'), u_twistU=U('u_twist'), u_k=U('u_k'), u_pulse=U('u_pulse'), u_touch=U('u_touch');
 
-  // ---------- Media texture (image/video or fallback) ----------
-  let mediaTex = gl.createTexture();
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, mediaTex);
+  // Texture setup (NPOT safe)
+  const mediaTex = gl.createTexture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, mediaTex);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  // Use CLAMP_TO_EDGE to support non-power-of-two images/videos
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.uniform1i(u_tex, 0);
 
-  let video = null; // HTMLVideoElement if user loads video
-  let hasTex = false;
+  let video=null, hasTex=false; // media
+  function uploadToTex(img){ gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, mediaTex); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img); hasTex=true; }
 
-  function uploadToTex(img){
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, mediaTex);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-    // Ensure NPOT safety each upload
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    hasTex = true;
-  }
+  // Controls
+  const file=document.getElementById('file'), clearBtn=document.getElementById('clear'), hideBtn=document.getElementById('hide');
+  const zoom=document.getElementById('zoom'), twist=document.getElementById('twist'), wedges=document.getElementById('wedges');
+  let rot=0, rpm=0, twistVal=parseFloat(twist.value), zoomVal=parseFloat(zoom.value), wedgesVal=parseFloat(wedges.value);
 
-  // ---------- Controls ----------
-  const file = document.getElementById('file');
-  const clearBtn = document.getElementById('clear');
-  const hideBtn  = document.getElementById('hide');
-  const zoom = document.getElementById('zoom');
-  const twist = document.getElementById('twist');
-  const wedges = document.getElementById('wedges');
-
-  let rot = 0.0;
-  let rpm = 0.0;        // rotations per minute from wheel
-  let twistVal = parseFloat(twist.value);
-  let zoomVal  = parseFloat(zoom.value);
-  let wedgesVal= parseFloat(wedges.value);
-
-  // --- Turntable Wheel ---
-  const wheel = document.getElementById('wheel');
-  const rpmEl = document.getElementById('rpm');
-  let wheelDragging = false;
-  let wheelAngle = 0; // radians
-  let lastAngle = 0;
-  let lastTime = performance.now();
-
-  function angleFromEvent(e){
-    const rect = wheel.getBoundingClientRect();
-    const cx = rect.left + rect.width/2;
-    const cy = rect.top  + rect.height/2;
-    const x = (e.touches? e.touches[0].clientX : e.clientX) - cx;
-    const y = (e.touches? e.touches[0].clientY : e.clientY) - cy;
-    return Math.atan2(y, x); // -PI..PI
-  }
-
-  function startWheel(e){
-    wheelDragging = true;
-    lastAngle = angleFromEvent(e);
-    lastTime = performance.now();
-    e.preventDefault();
-  }
-  function moveWheel(e){
-    if(!wheelDragging) return;
-    const a = angleFromEvent(e);
-    let da = a - lastAngle;
-    // unwrap
-    if(da >  Math.PI) da -= 2*Math.PI;
-    if(da < -Math.PI) da += 2*Math.PI;
-    wheelAngle += da;
-    // compute rpm from angular velocity
-    const t = performance.now();
-    const dt = (t - lastTime)/1000;
-    const rps = (da/(2*Math.PI)) / Math.max(dt,1e-4);
-    // low-pass filter for stability
-    rpm = rpm*0.85 + (rps*60)*0.15;
-    lastAngle = a; lastTime = t;
-    updateWheelVisual();
-    e.preventDefault();
-  }
-  function endWheel(){ wheelDragging = false; }
-
-  function updateWheelVisual(){
-    wheel.style.transform = `rotate(${wheelAngle}rad)`;
-    rpmEl.textContent = (rpm).toFixed(2);
-  }
-
-  wheel.addEventListener('mousedown', startWheel);
-  wheel.addEventListener('touchstart', startWheel, {passive:false});
-  addEventListener('mousemove', moveWheel, {passive:false});
-  addEventListener('touchmove', moveWheel, {passive:false});
-  addEventListener('mouseup', endWheel);
-  addEventListener('touchend', endWheel);
+  // Wheel
+  const wheel=document.getElementById('wheel'), rpmEl=document.getElementById('rpm');
+  let wheelDragging=false, wheelAngle=0, lastAngle=0, lastTime=performance.now();
+  function angleFromEvent(e){ const r=wheel.getBoundingClientRect(); const cx=r.left+r.width/2, cy=r.top+r.height/2; const x=(e.touches?e.touches[0].clientX:e.clientX)-cx; const y=(e.touches?e.touches[0].clientY:e.clientY)-cy; return Math.atan2(y,x); }
+  function startWheel(e){ wheelDragging=true; lastAngle=angleFromEvent(e); lastTime=performance.now(); e.preventDefault(); }
+  function moveWheel(e){ if(!wheelDragging) return; const a=angleFromEvent(e); let da=a-lastAngle; if(da> Math.PI) da-=2*Math.PI; if(da<-Math.PI) da+=2*Math.PI; wheelAngle+=da; const t=performance.now(); const dt=(t-lastTime)/1000; const rps=(da/(2*Math.PI))/Math.max(dt,1e-4); rpm=rpm*0.85+(rps*60)*0.15; lastAngle=a; lastTime=t; wheel.style.transform=`rotate(${wheelAngle}rad)`; rpmEl.textContent=rpm.toFixed(2); e.preventDefault(); }
+  function endWheel(){ wheelDragging=false; }
+  wheel.addEventListener('mousedown', startWheel); wheel.addEventListener('touchstart', startWheel, {passive:false});
+  addEventListener('mousemove', moveWheel, {passive:false}); addEventListener('touchmove', moveWheel, {passive:false});
+  addEventListener('mouseup', endWheel); addEventListener('touchend', endWheel);
 
   // Sliders
-  zoom.addEventListener('input', ()=> zoomVal = parseFloat(zoom.value));
-  twist.addEventListener('input',()=> twistVal= parseFloat(twist.value));
+  zoom.addEventListener('input', ()=> zoomVal=parseFloat(zoom.value));
+  twist.addEventListener('input',()=> twistVal=parseFloat(twist.value));
   wedges.addEventListener('input',()=> wedgesVal=parseFloat(wedges.value));
 
-  // Dock hide
-  const dock = document.getElementById('dock');
-  let dockVisible = true;
-  hideBtn.addEventListener('click', ()=>{
-    dockVisible = !dockVisible;
-    dock.style.display = dockVisible ? 'flex' : 'none';
-    hideBtn.textContent = dockVisible ? 'Hide UI' : 'Show UI';
-  });
+  // Hide UI
+  const dock=document.getElementById('dock'); let dockVisible=true;
+  hideBtn.addEventListener('click', ()=>{ dockVisible=!dockVisible; dock.style.display=dockVisible?'flex':'none'; hideBtn.textContent=dockVisible?'Hide UI':'Show UI'; });
 
   // File loading
   file.addEventListener('change', async (e)=>{
-    const f = e.target.files && e.target.files[0];
-    if(!f) return;
-    if(f.type.startsWith('image/')){
-      const img = new Image();
-      img.onload = ()=> uploadToTex(img);
-      img.src = URL.createObjectURL(f);
-      if(video){ video.pause(); video = null; }
-    } else if(f.type.startsWith('video/')){
-      if(video){ video.pause(); video = null; }
-      video = document.createElement('video');
-      video.muted = true; video.loop = true; video.playsInline = true;
-      video.onloadeddata = ()=> { video.play(); hasTex = true; showToast('Video loaded'); };
-      video.src = URL.createObjectURL(f);
-    }
+    const f=e.target.files && e.target.files[0]; if(!f) return;
+    if(f.type.startsWith('image/')){ const img=new Image(); img.onload=()=>uploadToTex(img); img.src=URL.createObjectURL(f); if(video){ video.pause(); video=null; } }
+    else if(f.type.startsWith('video/')){ if(video){ video.pause(); video=null; } video=document.createElement('video'); video.muted=true; video.loop=true; video.playsInline=true; video.preload='auto'; video.onloadeddata=()=>{ hasTex=true; try{ video.play(); }catch(_){} toast('Video loaded'); }; video.src=URL.createObjectURL(f); }
   });
+  clearBtn.addEventListener('click', ()=>{ hasTex=false; if(video){ video.pause(); video=null; } toast('Cleared media — using neon plasma'); });
 
-  clearBtn.addEventListener('click', ()=>{
-    hasTex = false;
-    if(video){ video.pause(); video=null; }
-    showToast('Cleared media — using neon plasma fallback');
-  });
+  // Touch pulse
+  let lastTap=0, touchUV=[0.5,0.5], pulse=0.0;
+  function onTapBurst(e){ const now=performance.now(); const dt=now-lastTap; lastTap=now; const r=canvas.getBoundingClientRect(); const x=(e.touches?e.touches[0].clientX:e.clientX)-r.left; const y=(e.touches?e.touches[0].clientY:e.clientY)-r.top; touchUV=[x/r.width, y/r.height]; if(dt<320){ pulse=1.0; toast('Pulse burst!'); } }
+  canvas.addEventListener('pointerdown', onTapBurst, {passive:true}); canvas.addEventListener('touchstart', onTapBurst, {passive:true});
 
-  // Touch burst (double-tap)
-  let lastTap = 0;
-  let touchUV = [0.5,0.5];
-  let pulse = 0.0;
-  function onTapBurst(e){
-    const now = performance.now();
-    const dt = now - lastTap;
-    lastTap = now;
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.touches? e.touches[0].clientX : e.clientX) - rect.left;
-    const y = (e.touches? e.touches[0].clientY : e.clientY) - rect.top;
-    touchUV = [x/rect.width, y/rect.height];
-    if(dt < 320){ // double tap
-      pulse = 1.0; // trigger burst
-      showToast('Pulse burst!');
-    }
-  }
-  canvas.addEventListener('pointerdown', onTapBurst, {passive:true});
-  canvas.addEventListener('touchstart', onTapBurst, {passive:true});
-
-  // Toast helper
-  const toast = document.getElementById('toast');
-  let toastTimer=null;
-  function showToast(msg){
-    toast.textContent = msg;
-    toast.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(()=> toast.classList.remove('show'), 1600);
-  }
-  // initial tip
-  setTimeout(()=> toast.classList.add('show'), 400);
-  setTimeout(()=> toast.classList.remove('show'), 2600);
-
-  // ---------- Render loop ----------
-  let t0 = performance.now();
+  // Render
+  let t0=performance.now();
   function frame(){
-    const t = performance.now();
-    const dt = (t - t0)/1000; t0 = t;
-
-    // rotate by rpm (user wheel) — rpm is rev/min; convert to rad/s
-    const radPerSec = rpm * 2*Math.PI / 60;
-    rot += radPerSec * dt;
-
-    // pulse decay
-    pulse *= 0.935;
-
-    // update video frame to texture
-    if(video && !video.paused && video.readyState >= 2){
-      uploadToTex(video);
-    }
-
+    const t=performance.now(); const dt=(t-t0)/1000; t0=t; rot += (rpm*2*Math.PI/60)*dt; pulse*=0.935;
+    if(video && !video.paused && video.readyState>=2){ uploadToTex(video); }
     gl.useProgram(prog);
     gl.uniform2f(u_res, gl.drawingBufferWidth, gl.drawingBufferHeight);
     gl.uniform1f(u_time, t/1000);
     gl.uniform1f(u_rot, rot);
-    gl.uniform1f(u_zoom, zoomVal);
-    gl.uniform1f(u_twist, twistVal);
+    gl.uniform1f(u_zoomU, zoomVal);
+    gl.uniform1f(u_twistU, twistVal);
     gl.uniform1f(u_k, wedgesVal);
     gl.uniform1f(u_pulse, pulse);
     gl.uniform2f(u_touch, touchUV[0], touchUV[1]);
-    gl.uniform1i(u_hasTex, hasTex ? 1 : 0);
-
+    gl.uniform1i(u_hasTex, hasTex?1:0);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     requestAnimationFrame(frame);
   }
   frame();
+
+  // Initial tip
+  setTimeout(()=>document.getElementById('toast').classList.add('show'), 400);
+  setTimeout(()=>document.getElementById('toast').classList.remove('show'), 2600);
 })();
 </script>
 </body>
